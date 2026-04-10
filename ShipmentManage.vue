@@ -1,7 +1,7 @@
-﻿<template>
+<template>
   <div class="shipment-management">
     <h1>发运管理</h1>
-
+    
     <div class="section">
       <h2>📋 待接收订单</h2>
       <div class="order-list" v-if="pendingOrders.length > 0">
@@ -32,12 +32,12 @@
           <h3>当前处理订单: {{ selectedOrder.id }}</h3>
           <p>车型: {{ selectedOrder.carModel }} | 数量: {{ selectedOrder.quantity }} 辆</p>
         </div>
-
+        
         <div class="form-group">
           <label>输入车身码 (VIN):</label>
-          <input
-            v-model="vinCode"
-            type="text"
+          <input 
+            v-model="vinCode" 
+            type="text" 
             placeholder="请输入17位车身码"
             maxlength="17"
             class="vin-input"
@@ -65,15 +65,15 @@
         </div>
 
         <div class="form-actions">
-          <button
-            class="bind-btn"
+          <button 
+            class="bind-btn" 
             @click="bindVehicle"
             :disabled="!vinVerified || boundVehicles.length >= selectedOrder.quantity"
           >
             绑定车辆
           </button>
-          <button
-            class="publish-btn"
+          <button 
+            class="publish-btn" 
             @click="publishOrder"
             :disabled="boundVehicles.length < selectedOrder.quantity"
           >
@@ -170,12 +170,12 @@ const acceptOrder = (order) => {
   vinError.value = ''
   vehicleInfo.value = null
   boundVehicles.value = []
-
+  
   const index = pendingOrders.value.findIndex(o => o.id === order.id)
   if (index > -1) {
     pendingOrders.value.splice(index, 1)
   }
-
+  
   alert(`已接收订单 ${order.id}`)
 }
 
@@ -183,21 +183,21 @@ const verifyVin = () => {
   vinError.value = ''
   vinVerified.value = false
   vehicleInfo.value = null
-
+  
   if (!vinCode.value) {
     return
   }
-
+  
   if (vinCode.value.length !== 17) {
     vinError.value = '车身码必须为17位'
     return
   }
-
+  
   if (boundVehicles.value.some(v => v.vin === vinCode.value)) {
     vinError.value = '该车辆已绑定'
     return
   }
-
+  
   const vehicle = vehicleDatabase[vinCode.value]
   if (vehicle) {
     vehicleInfo.value = vehicle
@@ -212,19 +212,19 @@ const bindVehicle = () => {
     alert('请先验证车身码')
     return
   }
-
+  
   if (boundVehicles.value.length >= selectedOrder.value.quantity) {
     alert('已达到订单数量上限')
     return
   }
-
+  
   boundVehicles.value.push({ ...vehicleInfo.value })
-
+  
   vinCode.value = ''
   vinVerified.value = false
   vehicleInfo.value = null
   vinError.value = ''
-
+  
   alert('车辆绑定成功！')
 }
 
@@ -238,18 +238,18 @@ const publishOrder = () => {
     alert(`请绑定所有车辆 (还需绑定 ${remaining} 辆)`)
     return
   }
-
+  
   const publishedOrder = {
     ...selectedOrder.value,
     boundVehicles: [...boundVehicles.value],
     publishTime: new Date().toLocaleString('zh-CN'),
     status: 'published'
   }
-
+  
   publishedOrders.value.unshift(publishedOrder)
-
+  
   alert(`订单 ${selectedOrder.value.id} 发布成功！`)
-
+  
   selectedOrder.value = null
   vinCode.value = ''
   vinVerified.value = false
