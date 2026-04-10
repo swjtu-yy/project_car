@@ -64,6 +64,8 @@
             <h3>运输方式选择</h3>
           </div>
 
+          <p v-if="estimating" class="estimate-loading">正在根据目的地请求后端估算，请稍候...</p>
+
           <div class="transport-grid">
             <div
               class="transport-option"
@@ -141,10 +143,10 @@
 
             <button
               class="btn-publish full-width"
-              :disabled="!selectedTransport"
+              :disabled="!selectedTransport || submitting"
               @click="submitOrder"
             >
-              确认并生成订单
+              {{ submitting ? '提交中...' : '确认并生成订单' }}
             </button>
           </div>
 
@@ -179,7 +181,9 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { estimateApi, submitApi } from '@/api/customer'
 
 const carModels = ref([
   { id: 1, name: '轿车 A级', unitPrice: 800, image: '/images/car-a.png' },
@@ -193,36 +197,132 @@ const quantity = ref(1)
 const destination = ref(null)
 const selectedTransport = ref(null)
 const orders = ref([])
+const estimating = ref(false)
+const submitting = ref(false)
+const estimateResult = ref({
+  recommendType: null,
+  roadCost: 0,
+  railCost: 0
+})
 
-const railwayCost = computed(() => { if (!selectedModel.value || !destination.value) return 0; return Math.round(selectedModel.value.unitPrice * quantity.value + destination.value.distance * 0.3) })
-const roadCost = computed(() => { if (!selectedModel.value || !destination.value) return 0; return Math.round(selectedModel.value.unitPrice * quantity.value + destination.value.distance * 0.5) })
+const railwayCost = computed(() => Number(estimateResult.value.railCost) || 0)
+const roadCost = computed(() => Number(estimateResult.value.roadCost) || 0)
 const railwayTime = computed(() => destination.value ? Math.ceil(destination.value.distance / 500) : 0)
 const roadTime = computed(() => destination.value ? Math.ceil(destination.value.distance / 800) : 0)
 const totalCost = computed(() => { if (selectedTransport.value === 'railway') return railwayCost.value; if (selectedTransport.value === 'road') return roadCost.value; return 0 })
 
-const selectModel = (model) => { selectedModel.value = selectedModel.value?.id === model.id ? null : model; quantity.value = 1; destination.value = null; selectedTransport.value = null }
+const resetEstimate = () => {
+  estimateResult.value = {
+    recommendType: null,
+    roadCost: 0,
+    railCost: 0
+  }
+}
+
+const fetchEstimate = async () => {
+  if (!selectedModel.value || !destination.value || quantity.value < 1) {
+    resetEstimate()
+    return
+  }
+
+  estimating.value = true
+  try {
+    const res = await estimateApi({
+      destination: destination.value.name
+    })
+
+    if (Number(res.code) === 1 && res.data) {
+      estimateResult.value = {
+        recommendType: Number(res.data.recommendType),
+        roadCost: Number(res.data.roadCost) || 0,
+        railCost: Number(res.data.railCost) || 0
+      }
+
+      if (!selectedTransport.value) {
+        selectedTransport.value = Number(res.data.recommendType) === 2 ? 'railway' : 'road'
+      }
+    } else if (Number(res.code) === 0) {
+      resetEstimate()
+      ElMessage.error(res.msg || '运输估算失败')
+    }
+  } catch (error) {
+    resetEstimate()
+    ElMessage.error('估算请求失败，请稍后重试')
+    console.error('Estimate error:', error)
+  } finally {
+    estimating.value = false
+  }
+}
+
+watch([selectedModel, quantity, destination], () => {
+  selectedTransport.value = null
+  fetchEstimate()
+})
+
+const selectModel = (model) => { selectedModel.value = selectedModel.value?.id === model.id ? null : model; quantity.value = 1; destination.value = null; selectedTransport.value = null; resetEstimate() }
 const increaseQuantity = () => { quantity.value++ }
 const decreaseQuantity = () => { if (quantity.value > 1) quantity.value-- }
 const selectTransport = (type) => { selectedTransport.value = type }
 
-const submitOrder = () => {
-  const newOrder = {
-    id: 'ORD' + Date.now(),
-    carModel: selectedModel.value.name,
-    quantity: quantity.value,
+const submitOrder = async () => {
+  if (!selectedModel.value || !destination.value || !selectedTransport.value) {
+    ElMessage.warning('请先选择车型、数量、目的地和运输方式')
+    return
+  }
+
+  const userId = Number(localStorage.getItem('userId'))
+  if (!userId) {
+    ElMessage.error('未获取到用户信息，请重新登录')
+    return
+  }
+
+  const payload = {
+    userId,
     destination: destination.value.name,
-    transportType: selectedTransport.value === 'railway' ? '铁路运输' : '公路运输',
-    totalCost: totalCost.value,
-    status: 'pending',
-    statusText: '待处理',
-    createTime: new Date().toLocaleString('zh-CN')
-  };
-  orders.value.unshift(newOrder);
-  alert('订单提交成功！订单号: ' + newOrder.id + ' 总费用: ¥' + newOrder.totalCost);
-  selectedModel.value = null;
-  quantity.value = 1;
-  destination.value = null;
-  selectedTransport.value = null;
+    transportType: selectedTransport.value === 'road' ? 1 : 2,
+    totalCost: Number(totalCost.value),
+    details: [
+      {
+        carModel: selectedModel.value.name,
+        quantity: Number(quantity.value)
+      }
+    ]
+  }
+
+  submitting.value = true
+  try {
+    const res = await submitApi(payload)
+
+    if (Number(res.code) === 1) {
+      ElMessage.success(res.msg || '订单提交成功')
+
+      const newOrder = {
+        id: res.data?.orderId || 'ORD' + Date.now(),
+        carModel: selectedModel.value.name,
+        quantity: quantity.value,
+        destination: destination.value.name,
+        transportType: selectedTransport.value === 'railway' ? '铁路运输' : '公路运输',
+        totalCost: totalCost.value,
+        status: 'pending',
+        statusText: '待处理',
+        createTime: new Date().toLocaleString('zh-CN')
+      }
+      orders.value.unshift(newOrder)
+
+      selectedModel.value = null
+      quantity.value = 1
+      destination.value = null
+      selectedTransport.value = null
+      resetEstimate()
+    } else {
+      ElMessage.error(res.msg || '订单提交失败')
+    }
+  } catch (error) {
+    ElMessage.error('订单提交失败，请稍后重试')
+    console.error('Submit order error:', error)
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -301,6 +401,12 @@ const submitOrder = () => {
 .modern-select { width: 100%; padding: 16px 20px; appearance: none; background: #F9F8F5; border: 2px solid transparent; border-radius: 16px; font-size: 14px; font-weight: 500; color: #111; transition: all 0.2s; cursor: pointer; outline: none; }
 .modern-select:focus { border-color: #FFD23F; background: #FFF; }
 .select-arrow { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: #888; pointer-events: none; font-size: 12px; }
+
+.estimate-loading {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #666;
+}
 
 .transport-grid { display: flex; flex-direction: column; gap: 16px; }
 .transport-option { display: flex; align-items: center; padding: 24px; background: #F9F8F5; border: 2px solid transparent; border-radius: 20px; cursor: pointer; transition: all 0.2s; position: relative; }

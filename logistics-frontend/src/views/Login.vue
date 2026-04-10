@@ -64,9 +64,9 @@
             clearable
             prefix-icon="Avatar"
           >
-            <el-option label="客户（4S店）" value="customer" />
-            <el-option label="发运商 (物流公司)" value="shipper" />
-            <el-option label="承运商（司机）" value="carrier" />
+            <el-option label="客户（4S店）" :value="1" />
+            <el-option label="发运商 (物流公司)" :value="2" />
+            <el-option label="承运商（司机）" :value="3" />
           </el-select>
         </el-form-item>
 
@@ -94,6 +94,7 @@
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { loginApi } from '@/api/login'
 
 // 导入Lottie动画
 import waitingAnimation from '../assets/waiting.json'
@@ -137,24 +138,52 @@ watch(isPasswordFocused, (isFocused) => {
 // 登录方法
 const handleLogin = async () => {
   // 表单校验
-  await loginFormRef.value.validate((valid) => {
+  await loginFormRef.value.validate(async (valid) => {
     if (!valid) return ElMessage.warning('请完善登录信息')
 
     isLoading.value = true
-    // 模拟登录请求
-    setTimeout(() => {
-      localStorage.setItem('token', 'mock-token-' + Date.now())
-      localStorage.setItem('userRole', loginForm.value.role)
+    try {
+      // 调用登录API
+      const res = await loginApi({
+        username: loginForm.value.username,
+        password: loginForm.value.password,
+        role: loginForm.value.role
+      })
 
-      const roleRoutes = {
-        customer: '/customer',
-        shipper: '/shipper',
-        carrier: '/carrier'
+      const code = Number(res.code)
+
+      if (code === 1) {
+        // 登录成功
+        ElMessage.success('登录成功')
+        const roleMap = {
+          1: 'customer',
+          2: 'shipper',
+          3: 'carrier'
+        }
+        const currentRole = roleMap[Number(loginForm.value.role)]
+
+        localStorage.setItem('token', res.data?.token || `login-${Date.now()}`)
+        localStorage.setItem('userId', res.data?.id || '')
+        localStorage.setItem('userName', res.data?.name || '')
+        localStorage.setItem('userRole', currentRole || '')
+
+        // 根据角色跳转到对应页面
+        const roleRoutes = {
+          1: '/customer',
+          2: '/shipper',
+          3: '/carrier'
+        }
+        router.push(roleRoutes[loginForm.value.role] || '/login')
+      } else if (code === 0) {
+        // 登录失败
+        ElMessage.error('账号或密码错误')
       }
-      router.push(roleRoutes[loginForm.value.role] || '/login')
+    } catch (error) {
+      ElMessage.error('登录请求失败，请检查网络连接')
+      console.error('Login error:', error)
+    } finally {
       isLoading.value = false
-      ElMessage.success('登录成功')
-    }, 800)
+    }
   })
 }
 </script>
