@@ -1,115 +1,166 @@
 ﻿<template>
-  <div class="shipment-management">
-    <h1>发运管理</h1>
+  <div class="be-run-app-fullscreen-wrapper">
+    <div class="app-container">
+      <aside class="white-sidebar">
+        <div class="logo-area">
+          <div class="logo-icon">📦</div>
+          <span class="logo-text">Be.run</span>
+        </div>
 
-    <div class="section">
-      <h2>📋 待接收订单</h2>
-      <div class="order-list" v-if="pendingOrders.length > 0">
-        <div class="order-card" v-for="order in pendingOrders" :key="order.id">
-          <div class="order-header">
-            <span class="order-id">订单号: {{ order.id }}</span>
-            <button class="accept-btn" @click="acceptOrder(order)">接收订单</button>
+        <nav class="nav-menu">
+          <div class="nav-item">🏠</div>
+          <div class="nav-item active">📋</div>
+          <div class="nav-item">📁</div>
+          <div class="nav-item">📅</div>
+          <div class="nav-item badge">🔔</div>
+          <div class="nav-item">⚙️</div>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="nav-item logout-btn-icon">🚪</div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="top-header">
+          <div class="header-left">
+            <h1 class="system-title">发运商系统</h1>
+            <span class="status-pill"><span class="dot">✔</span> 登录成功</span>
           </div>
-          <div class="order-info">
-            <p><strong>车型:</strong> {{ order.carModel }}</p>
-            <p><strong>数量:</strong> {{ order.quantity }} 辆</p>
-            <p><strong>目的地:</strong> {{ order.destination }}</p>
-            <p><strong>运输方式:</strong> {{ order.transportType }}</p>
-            <p><strong>客户:</strong> {{ order.customer }}</p>
-            <p><strong>下单时间:</strong> {{ order.createTime }}</p>
-          </div>
-        </div>
-      </div>
-      <div class="empty-state" v-else>
-        <p>暂无待接收订单</p>
-      </div>
-    </div>
-
-    <div class="section" v-if="selectedOrder">
-      <h2>🚗 车辆信息绑定</h2>
-      <div class="binding-form">
-        <div class="current-order">
-          <h3>当前处理订单: {{ selectedOrder.id }}</h3>
-          <p>车型: {{ selectedOrder.carModel }} | 数量: {{ selectedOrder.quantity }} 辆</p>
-        </div>
-
-        <div class="form-group">
-          <label>输入车身码 (VIN):</label>
-          <input
-            v-model="vinCode"
-            type="text"
-            placeholder="请输入17位车身码"
-            maxlength="17"
-            class="vin-input"
-            @blur="verifyVin"
-          />
-          <span class="vin-status" v-if="vinVerified">✅ 验证成功</span>
-          <span class="vin-status error" v-if="vinError">❌ {{ vinError }}</span>
-        </div>
-
-        <div class="vehicle-info" v-if="vehicleInfo">
-          <h4>车辆信息</h4>
-          <p><strong>车架号:</strong> {{ vehicleInfo.vin }}</p>
-          <p><strong>品牌:</strong> {{ vehicleInfo.brand }}</p>
-          <p><strong>型号:</strong> {{ vehicleInfo.model }}</p>
-          <p><strong>颜色:</strong> {{ vehicleInfo.color }}</p>
-          <p><strong>发动机号:</strong> {{ vehicleInfo.engineNo }}</p>
-        </div>
-
-        <div class="bound-vehicles" v-if="boundVehicles.length > 0">
-          <h4>已绑定车辆 ({{ boundVehicles.length }}/{{ selectedOrder.quantity }})</h4>
-          <div class="vehicle-tag" v-for="(vehicle, index) in boundVehicles" :key="index">
-            <span>{{ vehicle.vin }} - {{ vehicle.brand }} {{ vehicle.model }}</span>
-            <button class="remove-btn" @click="removeVehicle(index)">×</button>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button
-            class="bind-btn"
-            @click="bindVehicle"
-            :disabled="!vinVerified || boundVehicles.length >= selectedOrder.quantity"
-          >
-            绑定车辆
-          </button>
-          <button
-            class="publish-btn"
-            @click="publishOrder"
-            :disabled="boundVehicles.length < selectedOrder.quantity"
-          >
-            发布订单 (已绑定 {{ boundVehicles.length }}/{{ selectedOrder.quantity }} 辆)
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <h2>📦 已发布订单</h2>
-      <div class="order-list" v-if="publishedOrders.length > 0">
-        <div class="order-card published" v-for="order in publishedOrders" :key="order.id">
-          <div class="order-header">
-            <span class="order-id">订单号: {{ order.id }}</span>
-            <span class="status-badge">已发布</span>
-          </div>
-          <div class="order-info">
-            <p><strong>车型:</strong> {{ order.carModel }}</p>
-            <p><strong>数量:</strong> {{ order.quantity }} 辆</p>
-            <p><strong>目的地:</strong> {{ order.destination }}</p>
-            <p><strong>运输方式:</strong> {{ order.transportType }}</p>
-            <p><strong>绑定车辆数:</strong> {{ order.boundVehicles?.length || 0 }} 辆</p>
-            <p><strong>发布时间:</strong> {{ order.publishTime }}</p>
-          </div>
-          <div class="vehicle-list" v-if="order.boundVehicles">
-            <h5>绑定车辆:</h5>
-            <div class="vehicle-item" v-for="vehicle in order.boundVehicles" :key="vehicle.vin">
-              {{ vehicle.vin }} - {{ vehicle.brand }} {{ vehicle.model }}
+          <div class="header-right">
+            <div class="search-pill">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="搜索订单" />
             </div>
+            <button class="logout-pill">退出登录</button>
           </div>
+        </header>
+
+        <div class="page-title-area">
+          <h2>发运管理</h2>
         </div>
-      </div>
-      <div class="empty-state" v-else>
-        <p>暂无已发布订单</p>
-      </div>
+
+        <div class="content-layout">
+          <section class="main-column">
+            <div class="white-card">
+              <div class="card-header">
+                <h3>📋 待接收订单</h3>
+              </div>
+
+              <div class="order-list" v-if="pendingOrders.length > 0">
+                <div class="order-row" v-for="order in pendingOrders" :key="order.id">
+                  <div class="row-top">
+                    <span class="order-id">订单号: {{ order.id }}</span>
+                    <button class="btn-yellow" @click="acceptOrder(order)">接收订单</button>
+                  </div>
+                  <div class="row-details">
+                    <div class="detail-col">
+                      <p>车型: <strong>{{ order.carModel }}</strong></p>
+                      <p>数量: <strong>{{ order.quantity }} 辆</strong></p>
+                      <p>运输方式: {{ order.transportType }}</p>
+                      <p>下单时间: {{ order.createTime }}</p>
+                    </div>
+                    <div class="detail-col">
+                      <p>目的地: {{ order.destination }}</p>
+                      <p>客户: {{ order.customer }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="empty-state" v-else>
+                <p>暂无待接收订单</p>
+              </div>
+            </div>
+
+            <div class="white-card mt-24">
+               <div class="card-header">
+                <h3>📦 已发布订单</h3>
+              </div>
+              <div class="order-list" v-if="publishedOrders.length > 0">
+                <div class="order-row" v-for="order in publishedOrders" :key="order.id">
+                  <div class="row-top">
+                    <span class="order-id">订单号: {{ order.id }}</span>
+                    <span class="published-badge">已发布</span>
+                  </div>
+                  <div class="row-details">
+                    <div class="detail-col">
+                      <p>车型: <strong>{{ order.carModel }}</strong></p>
+                      <p>数量: <strong>{{ order.quantity }} 辆</strong></p>
+                      <p>绑定数量: {{ order.boundVehicles?.length || 0 }} 辆</p>
+                    </div>
+                    <div class="detail-col">
+                      <p>目的地: {{ order.destination }}</p>
+                      <p>发布时间: {{ order.publishTime }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="empty-state" v-else>
+                <p>暂无已发布订单</p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="side-column" v-if="selectedOrder">
+            <div class="white-card sticky-panel">
+              <div class="binding-header">
+                <h3>车辆信息绑定</h3>
+                <div class="progress-pill">已绑定 {{ boundVehicles.length }}/{{ selectedOrder.quantity }}</div>
+              </div>
+
+              <div class="task-overview">
+                <p>当前订单: <strong>{{ selectedOrder.id }}</strong></p>
+                <p>车型: {{ selectedOrder.carModel }} | 数量: {{ selectedOrder.quantity }} 辆</p>
+              </div>
+
+              <div class="form-area">
+                <label>输入车身码 (VIN):</label>
+                <input
+                  v-model="vinCode"
+                  type="text"
+                  placeholder="请输入17位车身码"
+                  maxlength="17"
+                  class="vin-input"
+                  @blur="verifyVin"
+                />
+                <div class="status-msg">
+                  <span v-if="vinVerified" class="msg-success">✔ 验证成功</span>
+                  <span v-if="vinError" class="msg-error">✖ {{ vinError }}</span>
+                </div>
+
+                <div class="vehicle-preview" v-if="vehicleInfo">
+                  <p><strong>{{ vehicleInfo.brand }} {{ vehicleInfo.model }}</strong></p>
+                  <p class="sub-text">{{ vehicleInfo.color }} | {{ vehicleInfo.engineNo }}</p>
+                </div>
+
+                <button
+                  class="btn-yellow full-width mt-10"
+                  @click="bindVehicle"
+                  :disabled="!vinVerified || boundVehicles.length >= selectedOrder.quantity"
+                >
+                  确认绑定该车
+                </button>
+              </div>
+
+              <div class="tags-area" v-if="boundVehicles.length > 0">
+                <p class="area-label">已选车辆清单</p>
+                <div class="vin-tag" v-for="(vehicle, index) in boundVehicles" :key="index">
+                  <span>{{ vehicle.vin.slice(-8) }} - {{ vehicle.model }}</span>
+                  <button class="remove-icon" @click="removeVehicle(index)">×</button>
+                </div>
+              </div>
+
+              <button
+                class="btn-publish full-width mt-20"
+                @click="publishOrder"
+                :disabled="boundVehicles.length < selectedOrder.quantity"
+              >
+                完成绑定并发布
+              </button>
+            </div>
+          </aside>
+        </div>
+      </main>
     </div>
   </div>
 </template>
@@ -118,33 +169,9 @@
 import { ref } from 'vue'
 
 const pendingOrders = ref([
-  {
-    id: 'ORD20260410001',
-    carModel: '轿车 A级',
-    quantity: 3,
-    destination: '北京',
-    transportType: '铁路运输',
-    customer: '成都4S店',
-    createTime: '2026-04-10 10:30:00'
-  },
-  {
-    id: 'ORD20260410002',
-    carModel: 'SUV B级',
-    quantity: 2,
-    destination: '上海',
-    transportType: '公路运输',
-    customer: '广州4S店',
-    createTime: '2026-04-10 11:15:00'
-  },
-  {
-    id: 'ORD20260410003',
-    carModel: '新能源车',
-    quantity: 5,
-    destination: '深圳',
-    transportType: '公路运输',
-    customer: '武汉4S店',
-    createTime: '2026-04-10 12:00:00'
-  }
+  { id: 'ORD20260410001', carModel: '轿车 A级', quantity: 3, destination: '北京', transportType: '铁路运输', customer: '成都4S店', createTime: '2026-04-10 10:30:00' },
+  { id: 'ORD20260410002', carModel: 'SUV B级', quantity: 2, destination: '上海', transportType: '公路运输', customer: '广州4S店', createTime: '2026-04-10 11:15:00' },
+  { id: 'ORD20260410003', carModel: '新能源车', quantity: 5, destination: '深圳', transportType: '公路运输', customer: '武汉4S店', createTime: '2026-04-10 12:00:00' }
 ])
 
 const publishedOrders = ref([])
@@ -165,142 +192,241 @@ const vehicleDatabase = {
 
 const acceptOrder = (order) => {
   selectedOrder.value = order
-  vinCode.value = ''
-  vinVerified.value = false
-  vinError.value = ''
-  vehicleInfo.value = null
-  boundVehicles.value = []
-
+  vinCode.value = ''; vinVerified.value = false; vinError.value = ''; vehicleInfo.value = null; boundVehicles.value = []
   const index = pendingOrders.value.findIndex(o => o.id === order.id)
-  if (index > -1) {
-    pendingOrders.value.splice(index, 1)
-  }
-
-  alert(`已接收订单 ${order.id}`)
+  if (index > -1) pendingOrders.value.splice(index, 1)
 }
 
 const verifyVin = () => {
-  vinError.value = ''
-  vinVerified.value = false
-  vehicleInfo.value = null
-
-  if (!vinCode.value) {
-    return
-  }
-
-  if (vinCode.value.length !== 17) {
-    vinError.value = '车身码必须为17位'
-    return
-  }
-
-  if (boundVehicles.value.some(v => v.vin === vinCode.value)) {
-    vinError.value = '该车辆已绑定'
-    return
-  }
-
+  vinError.value = ''; vinVerified.value = false; vehicleInfo.value = null
+  if (!vinCode.value) return
+  if (vinCode.value.length !== 17) { vinError.value = '须为17位'; return }
+  if (boundVehicles.value.some(v => v.vin === vinCode.value)) { vinError.value = '该车已绑定'; return }
   const vehicle = vehicleDatabase[vinCode.value]
-  if (vehicle) {
-    vehicleInfo.value = vehicle
-    vinVerified.value = true
-  } else {
-    vinError.value = '未找到该车辆信息'
-  }
+  if (vehicle) { vehicleInfo.value = vehicle; vinVerified.value = true }
+  else { vinError.value = '未找到车辆信息' }
 }
 
 const bindVehicle = () => {
-  if (!vinVerified.value || !vehicleInfo.value) {
-    alert('请先验证车身码')
-    return
-  }
-
-  if (boundVehicles.value.length >= selectedOrder.value.quantity) {
-    alert('已达到订单数量上限')
-    return
-  }
-
+  if (!vinVerified.value || !vehicleInfo.value) return
+  if (boundVehicles.value.length >= selectedOrder.value.quantity) return
   boundVehicles.value.push({ ...vehicleInfo.value })
-
-  vinCode.value = ''
-  vinVerified.value = false
-  vehicleInfo.value = null
-  vinError.value = ''
-
-  alert('车辆绑定成功！')
+  vinCode.value = ''; vinVerified.value = false; vehicleInfo.value = null; vinError.value = ''
 }
 
-const removeVehicle = (index) => {
-  boundVehicles.value.splice(index, 1)
-}
+const removeVehicle = (index) => { boundVehicles.value.splice(index, 1) }
 
 const publishOrder = () => {
-  if (boundVehicles.value.length < selectedOrder.value.quantity) {
-    const remaining = selectedOrder.value.quantity - boundVehicles.value.length
-    alert(`请绑定所有车辆 (还需绑定 ${remaining} 辆)`)
-    return
-  }
-
+  if (boundVehicles.value.length < selectedOrder.value.quantity) return
   const publishedOrder = {
     ...selectedOrder.value,
     boundVehicles: [...boundVehicles.value],
-    publishTime: new Date().toLocaleString('zh-CN'),
+    publishTime: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}),
     status: 'published'
   }
-
   publishedOrders.value.unshift(publishedOrder)
-
-  alert(`订单 ${selectedOrder.value.id} 发布成功！`)
-
-  selectedOrder.value = null
-  vinCode.value = ''
-  vinVerified.value = false
-  vehicleInfo.value = null
-  boundVehicles.value = []
+  selectedOrder.value = null; vinCode.value = ''; vinVerified.value = false; vehicleInfo.value = null; boundVehicles.value = []
 }
 </script>
 
 <style scoped>
-.shipment-management { max-width: 1200px; margin: 0 auto; }
-h1 { color: #2c3e50; margin-bottom: 30px; }
-h2 { color: #34495e; margin-bottom: 20px; font-size: 22px; }
-.section { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 25px; }
-.order-list { display: grid; gap: 15px; }
-.order-card { border: 2px solid #e0e0e0; border-radius: 8px; padding: 20px; transition: all 0.3s; }
-.order-card:hover { border-color: #27ae60; box-shadow: 0 4px 12px rgba(39,174,96,0.2); }
-.order-card.published { border-color: #27ae60; background: linear-gradient(135deg, #27ae6010 0%, #2ecc7110 100%); }
-.order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-.order-id { font-weight: bold; color: #333; font-size: 16px; }
-.accept-btn { background: #27ae60; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; transition: background 0.3s; }
-.accept-btn:hover { background: #229954; }
-.order-info p { margin: 8px 0; color: #555; }
-.order-info strong { color: #333; }
-.empty-state { text-align: center; padding: 40px; color: #999; font-size: 16px; }
-.binding-form { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 15px; }
-.current-order { background: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #27ae60; }
-.current-order h3 { margin: 0 0 10px 0; color: #27ae60; }
-.current-order p { margin: 0; color: #666; }
-.form-group { margin-bottom: 20px; }
-.form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-.vin-input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; font-family: monospace; letter-spacing: 1px; }
-.vin-input:focus { outline: none; border-color: #27ae60; }
-.vin-status { display: inline-block; margin-top: 8px; font-size: 14px; }
-.vin-status.error { color: #e74c3c; }
-.vehicle-info { background: white; padding: 15px; border-radius: 5px; margin-bottom: 15px; border: 1px solid #27ae60; }
-.vehicle-info h4 { margin: 0 0 10px 0; color: #27ae60; }
-.vehicle-info p { margin: 6px 0; color: #555; }
-.bound-vehicles { margin-bottom: 20px; }
-.bound-vehicles h4 { color: #333; margin-bottom: 10px; }
-.vehicle-tag { display: inline-flex; align-items: center; gap: 10px; background: #27ae60; color: white; padding: 8px 12px; border-radius: 20px; margin: 5px; font-size: 14px; }
-.remove-btn { background: rgba(255,255,255,0.3); border: none; color: white; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; }
-.remove-btn:hover { background: rgba(255,255,255,0.5); }
-.form-actions { display: flex; gap: 15px; margin-top: 20px; }
-.bind-btn { flex: 1; background: #3498db; color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-.bind-btn:hover:not(:disabled) { background: #2980b9; }
-.bind-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
-.publish-btn { flex: 2; background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); color: white; border: none; padding: 12px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
-.publish-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(39,174,96,0.4); }
-.publish-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
-.status-badge { background: #27ae60; color: white; padding: 5px 15px; border-radius: 15px; font-size: 14px; font-weight: bold; }
-.vehicle-list { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
-.vehicle-list h5 { color: #555; margin-bottom: 10px; }
-.vehicle-item { background: white; padding: 8px 12px; border-radius: 5px; margin-bottom: 5px; font-size: 14px; color: #666; border: 1px solid #e0e0e0; }
+/* ====== 核心覆盖逻辑 ====== */
+/* 强制全屏覆盖，防止被原有的绿色外壳组件包裹 */
+.be-run-app-fullscreen-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background-color: #EAE6DF; /* 图二背景色：暖灰米色 */
+  overflow-y: auto;
+}
+
+/* 全局字体和布局 */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: #2D2D2D;
+  padding: 24px;
+  box-sizing: border-box;
+  gap: 24px;
+}
+
+/* ====== 左侧胶囊形侧边栏 ====== */
+.white-sidebar {
+  width: 80px;
+  background: #FFFFFF;
+  border-radius: 40px; /* 图二的大圆角胶囊状 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+  position: sticky;
+  top: 24px;
+  height: calc(100vh - 48px); /* 视口高度减去上下padding */
+}
+
+.logo-area { text-align: center; margin-bottom: 50px; }
+.logo-icon { font-size: 28px; margin-bottom: 4px; }
+.logo-text { font-size: 12px; font-weight: 800; }
+
+.nav-menu { flex: 1; display: flex; flex-direction: column; gap: 24px; align-items: center; }
+.nav-item {
+  width: 44px; height: 44px;
+  display: flex; justify-content: center; align-items: center;
+  border-radius: 50%;
+  font-size: 20px; color: #555; cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-item:hover { background: #F5F5F5; }
+.nav-item.active { background: #FFD23F; color: #000; box-shadow: 0 4px 10px rgba(255, 210, 63, 0.3); }
+
+.sidebar-bottom { margin-top: auto; }
+.logout-btn-icon { background: #FF8A65; color: white; }
+
+/* ====== 右侧主内容区 ====== */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 顶部栏 */
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 0 10px;
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.system-title { font-size: 22px; font-weight: bold; margin: 0; color: #111; }
+.status-pill {
+  background: #E8F5E9; color: #4CAF50;
+  padding: 6px 14px; border-radius: 20px;
+  font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px;
+}
+.status-pill .dot { background: #4CAF50; color: white; border-radius: 50%; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+.search-pill {
+  background: #FFFFFF; border-radius: 30px;
+  padding: 10px 20px; display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+.search-pill input { border: none; outline: none; background: transparent; width: 160px; font-size: 14px; color: #333; }
+.logout-pill {
+  background: #FFFFFF; border: none; padding: 10px 24px;
+  border-radius: 30px; font-weight: bold; color: #F44336;
+  cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+
+.page-title-area h2 { font-size: 36px; font-weight: 900; margin: 10px 0 30px 10px; color: #111; letter-spacing: 1px; }
+
+/* 内容布局 */
+.content-layout { display: flex; gap: 24px; align-items: flex-start; }
+.main-column { flex: 1; min-width: 0; }
+.side-column { width: 380px; }
+.mt-24 { margin-top: 24px; }
+
+/* ====== 图二中的白色主卡片 ====== */
+.white-card {
+  background: #FFFFFF;
+  border-radius: 30px; /* 大圆角 */
+  padding: 32px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.02);
+}
+
+.card-header { margin-bottom: 24px; }
+.card-header h3 { font-size: 20px; font-weight: bold; margin: 0; color: #111; }
+
+/* 订单行 (浅灰底色) */
+.order-list { display: flex; flex-direction: column; gap: 16px; }
+.order-row {
+  background: #F9F8F5; /* 图二中订单的淡灰/米白色背景 */
+  border-radius: 20px;
+  padding: 24px;
+  transition: transform 0.2s;
+}
+.order-row:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
+
+.row-top {
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid #EAE6DF; /* 柔和的分割线 */
+  padding-bottom: 16px; margin-bottom: 16px;
+}
+.order-id { font-weight: bold; font-size: 16px; color: #111; }
+
+/* 黄色主按钮 */
+.btn-yellow {
+  background: #FFD23F; color: #222;
+  border: none; padding: 10px 24px; border-radius: 24px; /* 胶囊按钮 */
+  font-weight: bold; cursor: pointer; font-size: 14px;
+  transition: all 0.2s;
+}
+.btn-yellow:hover:not(:disabled) { background: #F6C523; transform: scale(1.02); }
+.btn-yellow:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.row-details { display: flex; gap: 40px; font-size: 14px; color: #666; }
+.detail-col p { margin: 8px 0; }
+.detail-col strong { color: #111; }
+
+/* ====== 右侧操作面板 (根据图二风格适配) ====== */
+.sticky-panel { position: sticky; top: 24px; }
+.binding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.binding-header h3 { margin: 0; font-size: 18px; font-weight: bold; }
+.progress-pill { background: #F9F8F5; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; color: #666; }
+
+.task-overview {
+  background: #F9F8F5; padding: 16px; border-radius: 16px;
+  margin-bottom: 24px; font-size: 14px; color: #555;
+}
+.task-overview strong { color: #111; font-size: 16px; }
+.task-overview p { margin: 4px 0; }
+
+.form-area label { display: block; margin-bottom: 8px; font-size: 14px; color: #555; font-weight: bold; }
+.vin-input {
+  width: 100%; box-sizing: border-box;
+  background: #F9F8F5; border: 2px solid #EAE6DF;
+  color: #111; padding: 14px; border-radius: 16px;
+  font-size: 15px; transition: border 0.2s; outline: none;
+}
+.vin-input:focus { border-color: #FFD23F; background: #FFF; }
+.status-msg { margin-top: 8px; font-size: 13px; height: 18px; font-weight: bold; }
+.msg-success { color: #4CAF50; }
+.msg-error { color: #F44336; }
+
+.vehicle-preview { background: #E8F5E9; padding: 14px 16px; border-radius: 12px; margin: 12px 0; border: 1px solid #C8E6C9; }
+.vehicle-preview p { margin: 0 0 4px 0; font-size: 14px; color: #2E7D32; }
+.vehicle-preview .sub-text { font-size: 12px; color: #4CAF50; }
+
+.tags-area { margin-top: 24px; }
+.area-label { font-size: 13px; color: #888; margin-bottom: 12px; font-weight: bold; }
+.vin-tag {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #F9F8F5; padding: 12px 16px; border-radius: 16px;
+  margin-bottom: 10px; font-size: 14px; font-weight: 500;
+}
+.remove-icon { background: none; border: none; color: #999; cursor: pointer; font-size: 18px; line-height: 1; }
+.remove-icon:hover { color: #F44336; }
+
+.btn-publish {
+  background: #111; color: #FFF;
+  border: none; padding: 16px; border-radius: 30px;
+  font-weight: bold; cursor: pointer; font-size: 16px;
+  transition: transform 0.2s;
+}
+.btn-publish:hover:not(:disabled) { transform: scale(1.02); }
+.btn-publish:disabled { opacity: 0.5; cursor: not-allowed; }
+.published-badge { background: #E8F5E9; color: #4CAF50; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; }
+
+/* 实用类 */
+.full-width { width: 100%; box-sizing: border-box; }
+.mt-10 { margin-top: 10px; }
+.mt-20 { margin-top: 20px; }
+.empty-state { text-align: center; color: #999; padding: 40px 0; }
 </style>

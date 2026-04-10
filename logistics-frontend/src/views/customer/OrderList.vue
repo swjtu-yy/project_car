@@ -1,48 +1,217 @@
 ﻿<template>
-  <div class="order-management">
-    <h1>订单管理</h1>
-    <div class="order-form">
-      <h2>新建订单</h2>
-      <div class="form-section">
-        <h3>1. 选择车型及数量</h3>
-        <div class="car-models">
-          <div v-for="model in carModels" :key="model.id" class="car-model-card" :class="{ selected: selectedModel?.id === model.id }" @click="selectModel(model)">
-            <img :src="model.image" :alt="model.name" class="car-image" />
-            <h4>{{ model.name }}</h4>
-            <p class="price">单价: ¥{{ model.unitPrice }}/辆</p>
-            <div class="quantity-control" v-if="selectedModel?.id === model.id">
-              <button @click.stop="decreaseQuantity" :disabled="quantity <= 1">-</button>
-              <span>{{ quantity }}</span>
-              <button @click.stop="increaseQuantity">+</button>
+  <div class="be-run-app-fullscreen-wrapper">
+    <div class="app-container">
+      <aside class="white-sidebar">
+        <div class="logo-area">
+          <div class="logo-icon">📦</div>
+          <span class="logo-text">Be.run</span>
+        </div>
+
+        <nav class="nav-menu">
+          <div class="nav-item active">🏠</div>
+          <div class="nav-item">📋</div>
+          <div class="nav-item">📁</div>
+          <div class="nav-item">📅</div>
+          <div class="nav-item badge">🔔</div>
+          <div class="nav-item">⚙️</div>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="nav-item logout-btn-icon">🚪</div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="top-header">
+          <div class="header-left">
+            <h1 class="system-title">发运商系统</h1>
+            <span class="status-pill"><span class="dot">✔</span> 登录成功</span>
+          </div>
+          <div class="header-right">
+            <div class="search-pill">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="搜索功能" />
             </div>
+            <button class="logout-pill">退出登录</button>
           </div>
+        </header>
+
+        <div class="page-title-area">
+          <h2>新建车辆运输订单</h2>
+          <p class="subtitle">选择车型、目的地及运输方案，快速生成发运单</p>
         </div>
-      </div>
-      <div class="form-section" v-if="selectedModel">
-        <h3>2. 选择目的地</h3>
-        <select v-model="destination" class="destination-select">
-          <option value="">请选择目的地城市</option>
-          <option v-for="city in destinations" :key="city.id" :value="city">{{ city.name }} (距离: {{ city.distance }}km)</option>
-        </select>
-      </div>
-      <div class="form-section" v-if="selectedModel && destination">
-        <h3>3. 运输方式选择</h3>
-        <div class="cost-calculation"><p><strong>订单信息：</strong></p><p>车型: {{ selectedModel.name }}</p><p>数量: {{ quantity }} 辆</p><p>目的地: {{ destination.name }}</p><p>距离: {{ destination.distance }} km</p></div>
-        <div class="transport-options">
-          <div class="transport-card" :class="{ selected: selectedTransport === 'railway', recommended: railwayCost < roadCost }" @click="selectTransport('railway')">
-            <div class="transport-header"><h4>🚂 铁路运输</h4><span v-if="railwayCost < roadCost" class="recommended-badge">推荐</span></div>
-            <p class="transport-price">¥{{ railwayCost }}</p><p class="transport-time">预计时间: {{ railwayTime }} 天</p><p class="transport-desc">适合长途运输，成本较低</p>
-          </div>
-          <div class="transport-card" :class="{ selected: selectedTransport === 'road', recommended: roadCost < railwayCost }" @click="selectTransport('road')">
-            <div class="transport-header"><h4>🚛 公路运输</h4><span v-if="roadCost < railwayCost" class="recommended-badge">推荐</span></div>
-            <p class="transport-price">¥{{ roadCost }}</p><p class="transport-time">预计时间: {{ roadTime }} 天</p><p class="transport-desc">灵活快捷，门到门服务</p>
-          </div>
+
+        <div class="content-layout">
+          <section class="form-column">
+            <div class="white-card step-card">
+              <div class="step-header">
+                <span class="step-num">1</span>
+                <h3>选择车型及数量</h3>
+              </div>
+              <div class="car-grid">
+                <div
+                  v-for="model in carModels"
+                  :key="model.id"
+                  class="car-tile"
+                  :class="{ 'is-selected': selectedModel?.id === model.id }"
+                  @click="selectModel(model)"
+                >
+                  <div class="tile-image-wrapper">
+                    <img :src="model.image" :alt="model.name" class="car-image" />
+                    <div class="check-icon" v-if="selectedModel?.id === model.id">✔</div>
+                  </div>
+                  <div class="tile-content">
+                    <h4 class="car-name">{{ model.name }}</h4>
+                    <p class="car-price">¥{{ model.unitPrice }} <span class="unit">/ 辆</span></p>
+
+                    <div class="quantity-wrapper" v-if="selectedModel?.id === model.id" @click.stop>
+                      <button class="qty-btn" @click="decreaseQuantity" :disabled="quantity <= 1">-</button>
+                      <span class="qty-num">{{ quantity }}</span>
+                      <button class="qty-btn" @click="increaseQuantity">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="white-card step-card" v-if="selectedModel">
+              <div class="step-header">
+                <span class="step-num">2</span>
+                <h3>选择目的地</h3>
+              </div>
+              <div class="input-group">
+                <label class="input-label">收车城市</label>
+                <div class="select-wrapper">
+                  <select v-model="destination" class="modern-select">
+                    <option value="" disabled>请选择目的地城市...</option>
+                    <option v-for="city in destinations" :key="city.id" :value="city">
+                      {{ city.name }} (距离: {{ city.distance }}km)
+                    </option>
+                  </select>
+                  <span class="select-arrow">▼</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="white-card step-card" v-if="selectedModel && destination">
+              <div class="step-header">
+                <span class="step-num">3</span>
+                <h3>运输方式选择</h3>
+              </div>
+
+              <div class="transport-grid">
+                <div
+                  class="transport-option"
+                  :class="{ 'is-active': selectedTransport === 'railway', 'is-recommended': railwayCost < roadCost }"
+                  @click="selectTransport('railway')"
+                >
+                  <div class="rec-badge" v-if="railwayCost < roadCost">推荐选择</div>
+                  <div class="tp-icon">🚂</div>
+                  <div class="tp-details">
+                    <h4>铁路运输</h4>
+                    <p class="tp-desc">适合长途，成本更优</p>
+                    <div class="tp-meta">预计 {{ railwayTime }} 天</div>
+                  </div>
+                  <div class="tp-price">
+                    ¥{{ railwayCost }}
+                  </div>
+                </div>
+
+                <div
+                  class="transport-option"
+                  :class="{ 'is-active': selectedTransport === 'road', 'is-recommended': roadCost < railwayCost }"
+                  @click="selectTransport('road')"
+                >
+                  <div class="rec-badge" v-if="roadCost < railwayCost">推荐选择</div>
+                  <div class="tp-icon">🚛</div>
+                  <div class="tp-details">
+                    <h4>公路运输</h4>
+                    <p class="tp-desc">门到门直达，更灵活</p>
+                    <div class="tp-meta">预计 {{ roadTime }} 天</div>
+                  </div>
+                  <div class="tp-price">
+                    ¥{{ roadCost }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert-savings" v-if="selectedTransport">
+                <div class="alert-icon">💡</div>
+                <div class="alert-text">
+                  <span v-if="railwayCost < roadCost">明智之选！选择铁路运输为您节省了 <strong>¥{{ roadCost - railwayCost }}</strong></span>
+                  <span v-else>明智之选！选择公路运输为您节省了 <strong>¥{{ railwayCost - roadCost }}</strong></span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="sidebar-column">
+            <div class="white-card sticky-panel">
+              <h3 class="panel-title">订单摘要</h3>
+
+              <div class="summary-content" v-if="selectedModel">
+                <div class="summary-row">
+                  <span class="s-label">发运车型</span>
+                  <span class="s-value">{{ selectedModel.name }}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="s-label">发运数量</span>
+                  <span class="s-value">{{ quantity }} 辆</span>
+                </div>
+                <div class="summary-row" v-if="destination">
+                  <span class="s-label">目的地</span>
+                  <span class="s-value">{{ destination.name }} <small>({{ destination.distance }}km)</small></span>
+                </div>
+                <div class="summary-row" v-if="selectedTransport">
+                  <span class="s-label">运输方式</span>
+                  <span class="s-value">{{ selectedTransport === 'railway' ? '铁路运输' : '公路运输' }}</span>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="summary-total">
+                  <span>预估总费用</span>
+                  <span class="total-price">¥{{ totalCost || '0' }}</span>
+                </div>
+
+                <button
+                  class="btn-publish full-width"
+                  :disabled="!selectedTransport"
+                  @click="submitOrder"
+                >
+                  确认并生成订单
+                </button>
+              </div>
+
+              <div class="summary-empty" v-else>
+                <div class="empty-icon">📝</div>
+                <p>请在左侧选择车型以开始测算订单明细。</p>
+              </div>
+            </div>
+
+            <div class="history-section" v-if="orders.length > 0">
+              <h3 class="history-title">最近提交</h3>
+              <div class="mini-order-list">
+                <div class="mini-order-card" v-for="order in orders" :key="order.id">
+                  <div class="mo-header">
+                    <span class="mo-id">{{ order.id }}</span>
+                    <span class="mo-status">{{ order.statusText }}</span>
+                  </div>
+                  <div class="mo-body">
+                    <p><strong>{{ order.carModel }}</strong> × {{ order.quantity }}辆</p>
+                    <p class="mo-sub">发往 {{ order.destination }} ({{ order.transportType }})</p>
+                  </div>
+                  <div class="mo-footer">
+                    <span class="mo-price">¥{{ order.totalCost }}</span>
+                    <span class="mo-time">{{ order.createTime.split(' ')[0] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
-        <div v-if="selectedTransport" class="savings-tip"><p v-if="railwayCost < roadCost">💡 选择铁路运输可节省 ¥{{ roadCost - railwayCost }}</p><p v-else>💡 选择公路运输可节省 ¥{{ railwayCost - roadCost }}</p></div>
-      </div>
-      <div class="form-actions" v-if="selectedTransport"><button class="submit-btn" @click="submitOrder">确认下单 (总计: ¥{{ totalCost }})</button></div>
+      </main>
     </div>
-    <div class="orders-list" v-if="orders.length > 0"><h2>我的订单</h2><div class="order-card" v-for="order in orders" :key="order.id"><div class="order-header"><span class="order-id">订单号: {{ order.id }}</span><span class="order-status" :class="order.status">{{ order.statusText }}</span></div><div class="order-details"><p>车型: {{ order.carModel }}</p><p>数量: {{ order.quantity }} 辆</p><p>目的地: {{ order.destination }}</p><p>运输方式: {{ order.transportType }}</p><p>总费用: ¥{{ order.totalCost }}</p><p>下单时间: {{ order.createTime }}</p></div></div></div>
   </div>
 </template>
 
@@ -68,5 +237,141 @@ const submitOrder = () => { const newOrder = { id: 'ORD' + Date.now(), carModel:
 </script>
 
 <style scoped>
-.order-management { max-width: 1200px; margin: 0 auto; } h1 { color: #2c3e50; margin-bottom: 30px; } h2 { color: #34495e; margin-bottom: 20px; } .order-form { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 30px; } .form-section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; } .form-section h3 { color: #555; margin-bottom: 15px; font-size: 18px; } .car-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; } .car-model-card { border: 2px solid #ddd; border-radius: 10px; padding: 15px; cursor: pointer; transition: all 0.3s; text-align: center; } .car-model-card:hover { border-color: #667eea; transform: translateY(-5px); box-shadow: 0 5px 15px rgba(102,126,234,0.3); } .car-model-card.selected { border-color: #667eea; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); } .car-image { width: 100%; height: 120px; object-fit: cover; border-radius: 5px; margin-bottom: 10px; } .car-model-card h4 { margin: 10px 0; color: #333; } .price { color: #e74c3c; font-weight: bold; font-size: 16px; } .quantity-control { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 10px; } .quantity-control button { width: 35px; height: 35px; border: none; background: #667eea; color: white; border-radius: 5px; font-size: 20px; cursor: pointer; } .quantity-control button:hover:not(:disabled) { background: #5568d3; } .quantity-control button:disabled { background: #ccc; cursor: not-allowed; } .quantity-control span { font-size: 20px; font-weight: bold; min-width: 40px; } .destination-select { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; } .destination-select:focus { outline: none; border-color: #667eea; } .cost-calculation { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; } .cost-calculation p { margin: 5px 0; color: #555; } .transport-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; } .transport-card { border: 2px solid #ddd; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.3s; position: relative; } .transport-card:hover { border-color: #667eea; transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); } .transport-card.selected { border-color: #667eea; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); } .transport-card.recommended { border-color: #27ae60; border-width: 3px; } .transport-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; } .transport-header h4 { margin: 0; color: #333; font-size: 20px; } .recommended-badge { background: #27ae60; color: white; padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; } .transport-price { font-size: 32px; font-weight: bold; color: #e74c3c; margin: 15px 0; } .transport-time { color: #666; margin: 10px 0; } .transport-desc { color: #999; font-size: 14px; } .savings-tip { background: linear-gradient(135deg, #27ae6020 0%, #2ecc7120 100%); border-left: 4px solid #27ae60; padding: 15px; border-radius: 5px; margin-top: 15px; } .savings-tip p { margin: 0; color: #27ae60; font-weight: bold; font-size: 16px; } .form-actions { margin-top: 30px; text-align: center; } .submit-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 50px; font-size: 18px; border-radius: 5px; cursor: pointer; font-weight: bold; } .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102,126,234,0.4); } .orders-list { margin-top: 30px; } .order-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 15px; } .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; } .order-id { font-weight: bold; color: #333; } .order-status { padding: 5px 15px; border-radius: 15px; font-size: 14px; font-weight: bold; } .order-status.pending { background: #fff3cd; color: #856404; } .order-details p { margin: 8px 0; color: #666; }
+/* ====== 核心覆盖逻辑 ====== */
+.be-run-app-fullscreen-wrapper {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 9999; background-color: #EAE6DF; overflow-y: auto;
+}
+
+.app-container {
+  display: flex; min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color: #111; padding: 24px; box-sizing: border-box; gap: 24px;
+}
+
+/* ====== 左侧胶囊侧边栏 (保持一致) ====== */
+.white-sidebar {
+  width: 80px; background: #FFFFFF; border-radius: 40px;
+  display: flex; flex-direction: column; align-items: center; padding: 30px 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03); position: sticky; top: 24px; height: calc(100vh - 48px);
+}
+.logo-area { text-align: center; margin-bottom: 50px; }
+.logo-icon { font-size: 28px; margin-bottom: 4px; }
+.logo-text { font-size: 12px; font-weight: 800; }
+.nav-menu { flex: 1; display: flex; flex-direction: column; gap: 24px; align-items: center; }
+.nav-item { width: 44px; height: 44px; display: flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 20px; color: #555; cursor: pointer; transition: all 0.2s; }
+.nav-item:hover { background: #F5F5F5; }
+.nav-item.active { background: #FFD23F; color: #000; box-shadow: 0 4px 10px rgba(255, 210, 63, 0.3); }
+.sidebar-bottom { margin-top: auto; }
+.logout-btn-icon { background: #FF8A65; color: white; }
+
+/* ====== 主内容区 ====== */
+.main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* 顶部栏 */
+.top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 0 10px; }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.system-title { font-size: 22px; font-weight: bold; margin: 0; color: #111; }
+.status-pill { background: #E8F5E9; color: #4CAF50; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+.status-pill .dot { background: #4CAF50; color: white; border-radius: 50%; width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.search-pill { background: #FFFFFF; border-radius: 30px; padding: 10px 20px; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+.search-pill input { border: none; outline: none; background: transparent; width: 160px; font-size: 14px; color: #333; }
+.logout-pill { background: #FFFFFF; border: none; padding: 10px 24px; border-radius: 30px; font-weight: bold; color: #F44336; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+
+/* 标题区 */
+.page-title-area { margin: 10px 0 30px 10px; }
+.page-title-area h2 { font-size: 36px; font-weight: 900; margin: 0 0 8px 0; color: #111; letter-spacing: 1px; }
+.subtitle { font-size: 15px; color: #666; margin: 0; }
+
+/* 布局 */
+.content-layout { display: flex; gap: 24px; align-items: flex-start; }
+.form-column { flex: 1; min-width: 0; }
+.sidebar-column { width: 360px; display: flex; flex-direction: column; gap: 24px; }
+
+/* ====== 通用白卡片 ====== */
+.white-card { background: #FFFFFF; border-radius: 30px; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.02); }
+.step-card { margin-bottom: 24px; animation: slideIn 0.4s ease-out forwards; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.step-num { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: #111; color: #FFD23F; border-radius: 50%; font-weight: 900; font-size: 16px; }
+.step-header h3 { font-size: 20px; margin: 0; font-weight: bold; color: #111; }
+
+/* ====== 车型网格 ====== */
+.car-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.car-tile { background: #F9F8F5; border: 2px solid transparent; border-radius: 20px; overflow: hidden; cursor: pointer; transition: all 0.2s ease; position: relative; }
+.car-tile:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+.car-tile.is-selected { border-color: #FFD23F; background: #FFF; box-shadow: 0 8px 20px rgba(255, 210, 63, 0.15); }
+.tile-image-wrapper { position: relative; height: 130px; background: #EAE6DF; }
+.car-image { width: 100%; height: 100%; object-fit: cover; mix-blend-mode: multiply; }
+.check-icon { position: absolute; top: 12px; right: 12px; background: #FFD23F; color: #111; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; }
+.tile-content { padding: 20px; text-align: center; }
+.car-name { margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #111; }
+.car-price { margin: 0; font-size: 18px; font-weight: 900; color: #111; }
+.car-price .unit { font-size: 12px; color: #888; font-weight: normal; }
+
+/* 数量选择 */
+.quantity-wrapper { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed #EAE6DF; }
+.qty-btn { width: 36px; height: 36px; border: none; border-radius: 12px; background: #EAE6DF; color: #111; font-size: 18px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.qty-btn:hover:not(:disabled) { background: #FFD23F; }
+.qty-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.qty-num { font-weight: 900; font-size: 18px; min-width: 24px; }
+
+/* ====== 目的地选择 ====== */
+.input-label { display: block; font-size: 14px; font-weight: bold; color: #555; margin-bottom: 12px; }
+.select-wrapper { position: relative; }
+.modern-select { width: 100%; padding: 16px 20px; appearance: none; background: #F9F8F5; border: 2px solid #EAE6DF; border-radius: 16px; font-size: 15px; font-weight: 500; color: #111; transition: all 0.2s; cursor: pointer; outline: none; }
+.modern-select:focus { border-color: #FFD23F; background: #FFF; }
+.select-arrow { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: #888; pointer-events: none; font-size: 12px; }
+
+/* ====== 运输方式 ====== */
+.transport-grid { display: flex; flex-direction: column; gap: 16px; }
+.transport-option { display: flex; align-items: center; padding: 24px; background: #F9F8F5; border: 2px solid transparent; border-radius: 20px; cursor: pointer; transition: all 0.2s; position: relative; }
+.transport-option:hover { transform: translateY(-2px); }
+.transport-option.is-active { border-color: #FFD23F; background: #FFF; box-shadow: 0 8px 20px rgba(255, 210, 63, 0.1); }
+.rec-badge { position: absolute; top: -12px; right: 24px; background: #4CAF50; color: white; padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: bold; }
+.tp-icon { font-size: 36px; margin-right: 20px; background: #EAE6DF; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border-radius: 16px; }
+.tp-details { flex: 1; }
+.tp-details h4 { margin: 0 0 6px 0; font-size: 18px; font-weight: bold; color: #111; }
+.tp-desc { margin: 0 0 8px 0; font-size: 13px; color: #666; }
+.tp-meta { font-size: 12px; font-weight: bold; color: #D84315; background: #FFCCBC; display: inline-block; padding: 4px 10px; border-radius: 8px; }
+.tp-price { font-size: 26px; font-weight: 900; color: #111; }
+
+.alert-savings { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding: 16px 20px; background: #E8F5E9; border-radius: 16px; color: #2E7D32; }
+.alert-icon { font-size: 20px; }
+.alert-text { font-size: 14px; }
+.alert-text strong { font-size: 16px; }
+
+/* ====== 右侧摘要面板 ====== */
+.sticky-panel { position: sticky; top: 24px; }
+.panel-title { margin: 0 0 24px 0; font-size: 20px; font-weight: bold; color: #111; }
+.summary-row { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px; }
+.s-label { color: #666; font-weight: bold; }
+.s-value { font-weight: bold; color: #111; text-align: right; }
+.s-value small { color: #888; font-weight: normal; }
+.divider { height: 1px; background: #EAE6DF; margin: 24px 0; }
+.summary-total { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; font-size: 16px; font-weight: bold; color: #666; }
+.total-price { font-size: 32px; font-weight: 900; color: #111; }
+
+.btn-publish { background: #111; color: #FFF; border: none; padding: 18px; border-radius: 30px; font-weight: bold; cursor: pointer; font-size: 16px; transition: transform 0.2s; }
+.btn-publish:hover:not(:disabled) { transform: scale(1.02); }
+.btn-publish:disabled { background: #EAE6DF; color: #999; cursor: not-allowed; }
+.summary-empty { text-align: center; padding: 40px 0; color: #888; }
+.empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.5; }
+
+/* ====== 侧边历史记录 ====== */
+.history-section { background: transparent; }
+.history-title { font-size: 16px; font-weight: bold; color: #111; margin: 0 0 16px 10px; }
+.mini-order-list { display: flex; flex-direction: column; gap: 16px; }
+.mini-order-card { background: #FFFFFF; border-radius: 20px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+.mo-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.mo-id { font-family: monospace; font-weight: bold; color: #111; font-size: 14px; }
+.mo-status { background: #FFF3E0; color: #EF6C00; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+.mo-body p { margin: 0 0 6px 0; color: #111; font-size: 14px; }
+.mo-body .mo-sub { color: #666; font-size: 13px; }
+.mo-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #EAE6DF; }
+.mo-price { font-weight: 900; color: #111; font-size: 16px; }
+.mo-time { color: #888; font-size: 12px; }
+.full-width { width: 100%; box-sizing: border-box; }
 </style>
