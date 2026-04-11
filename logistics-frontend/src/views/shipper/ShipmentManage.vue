@@ -13,10 +13,16 @@
             <h3 class="card-title">📋 待接收订单</h3>
           </div>
 
-          <div class="order-list" v-if="pendingOrders.length > 0">
+          <div class="empty-state" v-if="loadingOrders">
+            <div class="empty-icon">⏳</div>
+            <p>正在加载待接收订单...</p>
+          </div>
+
+          <div class="order-list" v-else-if="pendingOrders.length > 0">
             <div class="order-row" v-for="order in pendingOrders" :key="order.id">
               <div class="row-top">
                 <span class="order-id">订单号: {{ order.id }}</span>
+                <span class="order-time-inline">下单时间 {{ formatOrderTime(order.createTime) }}</span>
                 <button class="btn-yellow" @click="acceptOrder(order)">接收订单</button>
               </div>
               <div class="row-details">
@@ -24,18 +30,18 @@
                   <p>车型: <strong>{{ order.carModel }}</strong></p>
                   <p>数量: <strong>{{ order.quantity }} 辆</strong></p>
                   <p>运输方式: {{ order.transportType }}</p>
-                  <p>下单时间: {{ order.createTime }}</p>
                 </div>
                 <div class="detail-col">
+                  <p>起始地: <strong>{{ order.departurePoint }}</strong></p>
                   <p>目的地: <strong>{{ order.destination }}</strong></p>
-                  <p>客户: {{ order.customer }}</p>
+                  <p>价格: <strong>¥{{ order.totalCost }}</strong></p>
                 </div>
               </div>
             </div>
           </div>
           <div class="empty-state" v-else>
             <div class="empty-icon">📭</div>
-            <p>暂无待接收订单</p>
+            <p>{{ loadError || '暂无待接收订单' }}</p>
           </div>
         </div>
 
@@ -47,10 +53,16 @@
             <div class="history-row" v-for="order in publishedOrders" :key="order.id">
               <div class="status-dot"></div>
               <div class="history-info">
-                <span class="h-id">{{ order.id }}</span>
-                <span class="h-desc">{{ order.carModel }} · {{ order.quantity }}辆</span>
+                <span class="h-field h-id">{{ order.id }}</span>
+                <span class="h-field h-desc">{{ order.carModel }} · {{ order.quantity }}辆</span>
+                <span class="h-field">{{ order.departurePoint }} -> {{ order.destination }}</span>
+                <span class="h-field">¥{{ order.totalCost }}</span>
+                <span class="h-field">{{ order.transportType }}</span>
+                <span class="h-field h-status-cell">
+                  <span class="status-badge" :class="getStatusClass(order.status)">{{ order.statusText }}</span>
+                </span>
+                <span class="h-field h-time">{{ order.publishTime || order.createTime }}</span>
               </div>
-              <span class="h-time">{{ order.publishTime }}</span>
             </div>
           </div>
           <div class="empty-state mini" v-else>
@@ -63,7 +75,7 @@
         <div class="white-card sticky-panel dark-theme-card">
           <div class="binding-header-dark">
             <h3>车辆信息绑定</h3>
-            <div class="progress-pill">已绑定 {{ boundVehicles.length }}/{{ selectedOrder.quantity }}</div>
+            <div class="progress-pill">已填写 {{ vinCount }}/{{ selectedOrder.quantity }}</div>
           </div>
 
           <div class="task-overview">
@@ -73,49 +85,33 @@
 
           <div class="form-area">
             <label>输入车身码 (VIN):</label>
-            <div class="input-with-status">
-              <input
-                v-model="vinCode"
-                type="text"
-                placeholder="请输入17位车身码"
-                maxlength="17"
-                class="dark-input"
-                @blur="verifyVin"
-              />
-              <div class="status-msg">
-                <span v-if="vinVerified" class="msg-success">✔ 验证成功</span>
-                <span v-if="vinError" class="msg-error">✖ {{ vinError }}</span>
+            <div class="vin-input-list">
+              <div class="input-with-status" v-for="(vin, index) in vinInputs" :key="index">
+                <input
+                  v-model="vinInputs[index]"
+                  type="text"
+                  placeholder="请输入车身码"
+                  class="dark-input"
+                />
               </div>
-            </div>
-
-            <div class="vehicle-preview" v-if="vehicleInfo">
-              <p><strong>{{ vehicleInfo.brand }} {{ vehicleInfo.model }}</strong></p>
-              <p class="sub-text">{{ vehicleInfo.color }} | {{ vehicleInfo.engineNo }}</p>
             </div>
 
             <button
               class="btn-yellow full-width mt-10"
-              @click="bindVehicle"
-              :disabled="!vinVerified || boundVehicles.length >= selectedOrder.quantity"
+              @click="addVinInput"
+              :disabled="vinInputs.length >= selectedOrder.quantity"
+              type="button"
             >
-              确认绑定
+              添加车身码
             </button>
-          </div>
-
-          <div class="tags-area" v-if="boundVehicles.length > 0">
-            <p class="area-label">已选车辆</p>
-            <div class="dark-tag" v-for="(vehicle, index) in boundVehicles" :key="index">
-              <span>{{ vehicle.vin.slice(-6) }} - {{ vehicle.model }}</span>
-              <button class="remove-icon" @click="removeVehicle(index)">×</button>
-            </div>
           </div>
 
           <button
             class="btn-dark-primary full-width mt-20"
             @click="publishOrder"
-            :disabled="boundVehicles.length < selectedOrder.quantity"
+            :disabled="publishing"
           >
-            完成并发布
+            {{ publishing ? '发布中...' : '完成并发布' }}
           </button>
         </div>
       </aside>
@@ -124,67 +120,195 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { allOrderApi, receiveApi, bindApi } from '@/api/shipper'
 
-const pendingOrders = ref([
-  { id: 'ORD20260410001', carModel: '轿车 A级', quantity: 3, destination: '北京', transportType: '铁路运输', customer: '成都4S店', createTime: '2026-04-10 10:30:00' },
-  { id: 'ORD20260410002', carModel: 'SUV B级', quantity: 2, destination: '上海', transportType: '公路运输', customer: '广州4S店', createTime: '2026-04-10 11:15:00' },
-  { id: 'ORD20260410003', carModel: '新能源车', quantity: 5, destination: '深圳', transportType: '公路运输', customer: '武汉4S店', createTime: '2026-04-10 12:00:00' }
-])
+const pendingOrders = ref([])
+const loadingOrders = ref(false)
+const loadError = ref('')
+const publishing = ref(false)
 
 const publishedOrders = ref([])
 const selectedOrder = ref(null)
-const vinCode = ref('')
-const vinVerified = ref(false)
-const vinError = ref('')
-const vehicleInfo = ref(null)
-const boundVehicles = ref([])
+const vinInputs = ref([''])
+const vinCount = computed(() => vinInputs.value.map(v => String(v || '').trim()).filter(Boolean).length)
 
-const vehicleDatabase = {
-  'LSVAA2180E2123456': { vin: 'LSVAA2180E2123456', brand: '大众', model: '帕萨特', color: '黑色', engineNo: 'ENG123456' },
-  'WVWZZZ3CZWE123456': { vin: 'WVWZZZ3CZWE123456', brand: '大众', model: '途观', color: '白色', engineNo: 'ENG123457' },
-  'LFV3A23C8E3123456': { vin: 'LFV3A23C8E3123456', brand: '奥迪', model: 'A4L', color: '银色', engineNo: 'ENG123458' },
-  'WDD2050431F123456': { vin: 'WDD2050431F123456', brand: '奔驰', model: 'C级', color: '黑色', engineNo: 'ENG123459' },
-  'BMW1234567890ABCDE': { vin: 'BMW1234567890ABCDE', brand: '宝马', model: '3系', color: '蓝色', engineNo: 'ENG123460' }
+const extractRecords = (res) => {
+  if (Array.isArray(res?.data?.records)) return res.data.records
+  if (Array.isArray(res?.records)) return res.records
+  if (Array.isArray(res?.data)) return res.data
+  if (Array.isArray(res)) return res
+  return []
+}
+
+const toTimestamp = (timeStr) => {
+  if (!timeStr) return 0
+  const normalized = String(timeStr).replace(' ', 'T')
+  const timestamp = Date.parse(normalized)
+  return Number.isNaN(timestamp) ? 0 : timestamp
+}
+
+const formatOrderTime = (timeStr) => {
+  if (!timeStr) return '--'
+  const normalized = String(timeStr).replace('T', ' ')
+  return normalized.length >= 16 ? normalized.slice(0, 16) : normalized
+}
+
+const getTransportTypeText = (transportType) => {
+  if (transportType === 1 || transportType === '1' || transportType === 'road') return '公路运输'
+  if (transportType === 2 || transportType === '2' || transportType === 'railway') return '铁路运输'
+  return transportType || '待确认'
+}
+
+const getOrderStatusText = (status) => {
+  const statusMap = {
+    0: '待接收',
+    1: '待绑定',
+    2: '待运输',
+    3: '运输中',
+    4: '已完成',
+    pending: '待接收',
+    accepted: '已接收'
+  }
+
+  return statusMap[String(status)] || statusMap[Number(status)] || '待接收'
+}
+
+const getStatusClass = (status) => {
+  const key = Number(status)
+  if (key === 1) return 'status-wait-bind'
+  if (key === 2) return 'status-wait-transport'
+  if (key === 3) return 'status-transporting'
+  if (key === 4) return 'status-completed'
+  return 'status-pending'
+}
+
+const normalizeOrder = (raw) => ({
+  id: String(raw?.id ?? raw?.orderId ?? raw?.orderNo ?? '--'),
+  orderId: Number(raw?.orderId ?? raw?.id ?? raw?.orderNo) || null,
+  carModel: raw?.carModel ?? raw?.modelName ?? raw?.vehicleModel ?? raw?.model ?? '--',
+  quantity: Number(raw?.quantity ?? raw?.totalQuantity ?? raw?.carQuantity ?? raw?.count) || 0,
+  departurePoint: raw?.departurePoint ?? raw?.startPoint ?? raw?.fromCity ?? '--',
+  destination: raw?.destination ?? raw?.arriveCity ?? raw?.toCity ?? '--',
+  totalCost: Number(raw?.totalCost) || 0,
+  transportType: raw?.transportTypeText ?? getTransportTypeText(raw?.transportType ?? raw?.via),
+  currentLocation: raw?.via ?? raw?.currentLocation ?? '--',
+  customer: raw?.customer ?? raw?.shipper ?? raw?.customerName ?? raw?.dealerName ?? '--',
+  createTime: raw?.createTime ?? raw?.publishTime ?? raw?.orderTime ?? raw?.updateTime ?? '',
+  updateTime: raw?.updateTime ?? raw?.publishTime ?? raw?.createTime ?? raw?.orderTime ?? '',
+  publishTime: raw?.publishTime ?? raw?.updateTime ?? raw?.createTime ?? raw?.orderTime ?? '',
+  status: raw?.status ?? raw?.orderStatus ?? '1',
+  statusText: getOrderStatusText(raw?.status ?? raw?.orderStatus)
+})
+
+const isPendingOrder = (order) => {
+  return Number(order.status) === 0
+}
+
+const loadPendingOrders = async () => {
+  loadingOrders.value = true
+  loadError.value = ''
+
+  try {
+    const res = await allOrderApi()
+    const records = extractRecords(res)
+    const normalizedOrders = records.map(normalizeOrder)
+
+    pendingOrders.value = normalizedOrders
+      .filter(isPendingOrder)
+      .sort((a, b) => toTimestamp(b.createTime) - toTimestamp(a.createTime))
+
+    publishedOrders.value = normalizedOrders
+      .filter(order => Number(order.status) !== 0)
+      .sort((a, b) => {
+        const statusA = Number.isNaN(Number(a.status)) ? 999 : Number(a.status)
+        const statusB = Number.isNaN(Number(b.status)) ? 999 : Number(b.status)
+        if (statusA !== statusB) return statusA - statusB
+
+        const timeA = toTimestamp(a.updateTime || a.publishTime || a.createTime)
+        const timeB = toTimestamp(b.updateTime || b.publishTime || b.createTime)
+        return timeB - timeA
+      })
+
+    if (!records.length && Number(res?.code) === 0) {
+      loadError.value = res?.msg || '暂无待接收订单'
+    }
+  } catch (error) {
+    pendingOrders.value = []
+    publishedOrders.value = []
+    loadError.value = '获取待接收订单失败，请稍后重试'
+    console.error('Load pending orders error:', error)
+  } finally {
+    loadingOrders.value = false
+  }
 }
 
 const acceptOrder = (order) => {
   selectedOrder.value = order
-  vinCode.value = ''; vinVerified.value = false; vinError.value = ''; vehicleInfo.value = null; boundVehicles.value = []
+  vinInputs.value = ['']
+
   const index = pendingOrders.value.findIndex(o => o.id === order.id)
   if (index > -1) pendingOrders.value.splice(index, 1)
 }
 
-const verifyVin = () => {
-  vinError.value = ''; vinVerified.value = false; vehicleInfo.value = null
-  if (!vinCode.value) return
-  if (vinCode.value.length !== 17) { vinError.value = '须为17位'; return }
-  if (boundVehicles.value.some(v => v.vin === vinCode.value)) { vinError.value = '该车已绑定'; return }
-  const vehicle = vehicleDatabase[vinCode.value]
-  if (vehicle) { vehicleInfo.value = vehicle; vinVerified.value = true }
-  else { vinError.value = '未找到车辆信息' }
-}
+const addVinInput = () => {
+  if (!selectedOrder.value) return
+  if (vinInputs.value.length >= selectedOrder.value.quantity) return
 
-const bindVehicle = () => {
-  if (!vinVerified.value || !vehicleInfo.value) return
-  if (boundVehicles.value.length >= selectedOrder.value.quantity) return
-  boundVehicles.value.push({ ...vehicleInfo.value })
-  vinCode.value = ''; vinVerified.value = false; vehicleInfo.value = null; vinError.value = ''
-}
-
-const removeVehicle = (index) => { boundVehicles.value.splice(index, 1) }
-
-const publishOrder = () => {
-  if (boundVehicles.value.length < selectedOrder.value.quantity) return
-  const publishedOrder = {
-    ...selectedOrder.value,
-    boundVehicles: [...boundVehicles.value],
-    publishTime: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}),
-    status: 'published'
+  const lastValue = String(vinInputs.value[vinInputs.value.length - 1] || '').trim()
+  if (!lastValue) {
+    window.alert('请输入车身码')
+    return
   }
-  publishedOrders.value.unshift(publishedOrder)
-  selectedOrder.value = null; vinCode.value = ''; vinVerified.value = false; vehicleInfo.value = null; boundVehicles.value = []
+
+  vinInputs.value.push('')
 }
+
+const publishOrder = async () => {
+  if (!selectedOrder.value) return
+
+  const vinList = vinInputs.value.map(v => String(v || '').trim()).filter(Boolean)
+  if (vinList.length < selectedOrder.value.quantity) {
+    window.alert('车身码数量不足')
+    return
+  }
+
+  const orderId = selectedOrder.value.orderId ?? Number(selectedOrder.value.id)
+  if (!orderId) {
+    window.alert('订单ID无效，无法发布')
+    return
+  }
+
+  publishing.value = true
+  try {
+
+    const receiveRes = await receiveApi({ orderId })
+    if (Number(receiveRes?.code) !== 1) {
+      window.alert(receiveRes?.msg || '更新订单状态失败')
+      return
+    }
+
+    const bindRes = await bindApi({ orderId, vinList })
+    if (Number(bindRes?.code) !== 1) {
+      window.alert(bindRes?.msg || '绑定车身码失败')
+      return
+    }
+
+    selectedOrder.value = null
+    vinInputs.value = ['']
+    await loadPendingOrders()
+  } catch (error) {
+    window.alert('发布失败，请稍后重试')
+    console.error('Publish order error:', error)
+    await loadPendingOrders()
+  } finally {
+    publishing.value = false
+  }
+}
+
+onMounted(() => {
+  loadPendingOrders()
+})
 </script>
 
 <style scoped>
@@ -239,14 +363,14 @@ const publishOrder = () => {
 }
 .order-row:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
 
-.row-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #EAE6DF; padding-bottom: 12px; margin-bottom: 16px; }
+.row-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 1px solid #EAE6DF; padding-bottom: 12px; margin-bottom: 16px; column-gap: 10px; }
 .order-id { font-weight: bold; font-size: 15px; color: #111; }
+.order-time-inline { justify-self: center; font-size: 12px; font-weight: 500; color: #666; }
 
 .row-details { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; color: #666; }
 .detail-col { flex: 1; min-width: 140px; }
 .detail-col p { margin: 6px 0; }
 .detail-col strong { color: #111; }
-
 /* 主按钮，禁止换行 */
 .btn-yellow {
   background: #FFD23F; color: #222;
@@ -260,12 +384,64 @@ const publishOrder = () => {
 
 /* 历史列表 */
 .history-list { display: flex; flex-direction: column; gap: 12px; }
-.history-row { display: flex; align-items: center; background: #F9F8F5; padding: 12px 20px; border-radius: 12px; }
-.status-dot { width: 8px; height: 8px; background: #FFD23F; border-radius: 50%; margin-right: 16px; }
-.history-info { flex: 1; display: flex; gap: 16px; align-items: center; }
-.h-id { font-weight: bold; font-size: 14px; color: #111; }
+.history-row { display: flex; align-items: center; background: #F9F8F5; padding: 12px 12px; border-radius: 12px; }
+.status-dot { width: 8px; height: 8px; background: #FFD23F; border-radius: 50%; margin-right: 8px; }
+.history-info {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 0.5fr 1.5fr 1.35fr 0.85fr 0.95fr 1fr 1.25fr;
+  align-items: center;
+  column-gap: 10px;
+}
+.h-field { min-width: 0; font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.h-id { font-weight: bold; font-size: 14px; color: #111; text-align: left; }
 .h-desc { font-size: 13px; color: #666; }
-.h-time { font-size: 12px; color: #999; }
+.h-time { color: #999; text-align: right; }
+.h-status-cell { overflow: visible; text-align: center; }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+
+.status-pending {
+  color: #8D6E63;
+  background: #F5F1EE;
+  border-color: #E4DAD2;
+}
+
+.status-wait-bind {
+  color: #D17A00;
+  background: #FFF4DC;
+  border-color: #FFD27A;
+}
+
+.status-wait-transport {
+  color: #0D6EFD;
+  background: #E6F1FF;
+  border-color: #9FC5FF;
+}
+
+.status-transporting {
+  color: #6F42C1;
+  background: #EFE7FF;
+  border-color: #C7B3FF;
+}
+
+.status-completed {
+  color: #1E8E3E;
+  background: #E8F5E9;
+  border-color: #A7D7AE;
+}
 
 /* 右侧绑定面板 (深色卡片) */
 .sticky-panel { position: sticky; top: 24px; }
@@ -279,7 +455,8 @@ const publishOrder = () => {
 .task-overview p { margin: 4px 0; }
 
 .form-area label { display: block; margin-bottom: 8px; font-size: 12px; color: #aaa; font-weight: bold; }
-.input-with-status { margin-bottom: 16px; }
+.vin-input-list { display: flex; flex-direction: column; gap: 8px; }
+.input-with-status { margin-bottom: 0; }
 .dark-input { width: 100%; box-sizing: border-box; background: #1A1A1A; border: 1px solid #444; color: white; padding: 12px; border-radius: 12px; font-size: 13px; transition: border 0.2s; outline: none; }
 .dark-input:focus { border-color: #FFD23F; }
 .status-msg { margin-top: 6px; font-size: 12px; height: 16px; font-weight: bold; }

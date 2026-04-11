@@ -64,9 +64,9 @@
             clearable
             prefix-icon="Avatar"
           >
-            <el-option label="客户（4S店）" :value="1" />
-            <el-option label="发运商 (物流公司)" :value="2" />
-            <el-option label="承运商（司机）" :value="3" />
+            <el-option label="客户" :value="1" />
+            <el-option label="发运商" :value="2" />
+            <el-option label="承运商" :value="3" />
           </el-select>
         </el-form-item>
 

@@ -156,23 +156,37 @@
           </div>
         </div>
 
-        <div class="history-section" v-if="orders.length > 0">
+        <div class="history-section">
           <h3 class="history-title">最近提交</h3>
-          <div class="mini-order-list">
-            <div class="white-card mini-order-card" v-for="order in orders" :key="order.id">
+          <div class="mini-order-list" v-if="sortedRecentOrders.length > 0">
+            <div class="white-card mini-order-card" v-for="order in visibleRecentOrders" :key="order.id">
               <div class="mo-header">
-                <span class="mo-id">{{ order.id }}</span>
+                <span class="mo-id"><strong>订单号 {{ order.id }}</strong></span>
                 <span class="mo-status">{{ order.statusText }}</span>
               </div>
               <div class="mo-body">
-                <p><strong>{{ order.carModel }}</strong> × {{ order.quantity }}辆</p>
-                <p class="mo-sub">发往 {{ order.destination }} ({{ order.transportType }})</p>
+                <div class="mo-grid">
+                  <p class="mo-sub">{{ order.departurePoint }} -> {{ order.destination }}</p>
+                  <p class="mo-sub">{{ order.carModel }}</p>
+                  <p class="mo-sub">数量：{{ order.totalQuantity }}</p>
+                  <p class="mo-sub">{{ order.via ? `当前位置：${order.via}` : '当前位置：--' }}</p>
+                </div>
               </div>
               <div class="mo-footer">
                 <span class="mo-price">¥{{ order.totalCost }}</span>
-                <span class="mo-time">{{ order.createTime.split(' ')[0] }}</span>
+                <span class="mo-time">{{ order.updateTime || order.createTime || '--' }}</span>
               </div>
             </div>
+            <button
+              v-if="sortedRecentOrders.length > 2"
+              class="btn-history-toggle"
+              @click="isRecentExpanded = !isRecentExpanded"
+            >
+              {{ isRecentExpanded ? '收起' : '展开更多' }}
+            </button>
+          </div>
+          <div class="white-card mini-order-empty" v-else>
+            暂无最近订单
           </div>
         </div>
       </aside>
@@ -181,9 +195,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { estimateApi, submitApi } from '@/api/customer'
+import { estimateApi, submitApi, pageApi } from '@/api/customer'
 
 const carModels = ref([
   { id: 1, name: '轿车 A级', unitPrice: 800, image: '/images/car-a.png' },
@@ -197,6 +211,7 @@ const quantity = ref(1)
 const destination = ref(null)
 const selectedTransport = ref(null)
 const orders = ref([])
+const isRecentExpanded = ref(false)
 const estimating = ref(false)
 const submitting = ref(false)
 const estimateResult = ref({
@@ -210,6 +225,89 @@ const roadCost = computed(() => Number(estimateResult.value.roadCost) || 0)
 const railwayTime = computed(() => destination.value ? Math.ceil(destination.value.distance / 500) : 0)
 const roadTime = computed(() => destination.value ? Math.ceil(destination.value.distance / 800) : 0)
 const totalCost = computed(() => { if (selectedTransport.value === 'railway') return railwayCost.value; if (selectedTransport.value === 'road') return roadCost.value; return 0 })
+
+const sortedRecentOrders = computed(() => {
+  return [...orders.value]
+    .sort((a, b) => toTimestamp(b.updateTime || b.createTime) - toTimestamp(a.updateTime || a.createTime))
+    .slice(0, 5)
+})
+
+const visibleRecentOrders = computed(() => {
+  return isRecentExpanded.value ? sortedRecentOrders.value : sortedRecentOrders.value.slice(0, 2)
+})
+
+const orderStatusMap = {
+  0: '待处理',
+  1: '待绑定',
+  2: '待运输',
+  3: '运输中',
+  4: '已完成'
+}
+
+const getOrderStatusText = (status) => orderStatusMap[Number(status)] || '未知状态'
+
+const normalizeOrder = (raw) => ({
+  id: raw?.id ?? '--',
+  status: Number(raw?.status),
+  statusText: getOrderStatusText(raw?.status),
+  totalCost: Number(raw?.totalCost) || 0,
+  carModel: raw?.carModel || raw?.details?.[0]?.carModel || '--',
+  departurePoint: raw?.departurePoint || '--',
+  destination: raw?.destination || '--',
+  totalQuantity: Number(raw?.totalQuantity ?? raw?.quantity) || 0,
+  createTime: raw?.createTime || '',
+  updateTime: raw?.updateTime || '',
+  via: raw?.via || ''
+})
+
+const toTimestamp = (timeStr) => {
+  if (!timeStr) return 0
+  const normalized = String(timeStr).replace(' ', 'T')
+  const ts = Date.parse(normalized)
+  return Number.isNaN(ts) ? 0 : ts
+}
+
+const loadRecentOrders = async () => {
+  const userId = Number(localStorage.getItem('userId'))
+  if (!userId) {
+    orders.value = []
+    return
+  }
+
+  try {
+    let res = await pageApi(userId)
+    let records =
+      Array.isArray(res?.data?.records) ? res.data.records :
+      Array.isArray(res?.records) ? res.records :
+      Array.isArray(res?.data) ? res.data :
+      Array.isArray(res) ? res : []
+
+    let success = Number(res?.code) === 1 || records.length > 0
+
+    if (!success) {
+      res = await pageApi(userId, true)
+      records =
+        Array.isArray(res?.data?.records) ? res.data.records :
+        Array.isArray(res?.records) ? res.records :
+        Array.isArray(res?.data) ? res.data :
+        Array.isArray(res) ? res : []
+      success = Number(res?.code) === 1 || records.length > 0
+    }
+
+    if (success) {
+      orders.value = records
+        .map(normalizeOrder)
+      isRecentExpanded.value = false
+    } else {
+      orders.value = []
+      ElMessage.error(res.msg || '获取最近订单失败')
+    }
+  } catch (error) {
+    orders.value = []
+    ElMessage.error('获取最近订单失败，请稍后重试')
+    console.error('Load recent orders error:', error)
+  }
+}
 
 const resetEstimate = () => {
   estimateResult.value = {
@@ -295,19 +393,7 @@ const submitOrder = async () => {
 
     if (Number(res.code) === 1) {
       ElMessage.success(res.msg || '订单提交成功')
-
-      const newOrder = {
-        id: res.data?.orderId || 'ORD' + Date.now(),
-        carModel: selectedModel.value.name,
-        quantity: quantity.value,
-        destination: destination.value.name,
-        transportType: selectedTransport.value === 'railway' ? '铁路运输' : '公路运输',
-        totalCost: totalCost.value,
-        status: 'pending',
-        statusText: '待处理',
-        createTime: new Date().toLocaleString('zh-CN')
-      }
-      orders.value.unshift(newOrder)
+      await loadRecentOrders()
 
       selectedModel.value = null
       quantity.value = 1
@@ -324,6 +410,10 @@ const submitOrder = async () => {
     submitting.value = false
   }
 }
+
+onMounted(() => {
+  loadRecentOrders()
+})
 </script>
 
 <style scoped>
@@ -444,12 +534,26 @@ const submitOrder = async () => {
 .history-section { background: transparent; }
 .history-title { font-size: 16px; font-weight: bold; color: #111; margin: 0 0 16px 10px; }
 .mini-order-list { display: flex; flex-direction: column; gap: 16px; }
+.mini-order-empty { padding: 18px; border-radius: 16px; text-align: center; color: #999; font-size: 14px; }
 .mini-order-card { padding: 20px; border-radius: 20px; }
-.mo-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
-.mo-id { font-family: monospace; font-weight: bold; color: #111; font-size: 14px; }
+.btn-history-toggle {
+  border: none;
+  background: #111;
+  color: #FFF;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  align-self: center;
+}
+.btn-history-toggle:hover { opacity: 0.9; }
+.mo-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.mo-id { color: #111; font-size: 15px; }
 .mo-status { background: #FFF3E0; color: #EF6C00; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
-.mo-body p { margin: 0 0 6px 0; color: #111; font-size: 14px; }
-.mo-body .mo-sub { color: #666; font-size: 13px; }
+.mo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.mo-body p { margin: 0; color: #111; font-size: 14px; }
+.mo-body .mo-sub { color: #666; font-size: 13px; line-height: 1.45; }
 .mo-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #EAE6DF; }
 .mo-price { font-weight: 900; color: #111; font-size: 16px; }
 .mo-time { color: #888; font-size: 12px; }

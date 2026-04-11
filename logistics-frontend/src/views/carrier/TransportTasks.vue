@@ -45,7 +45,7 @@
             <h3>✅ 已完成订单</h3>
           </div>
           <div class="order-list" v-if="completedTasks.length > 0">
-            <div class="order-row completed-row" v-for="task in completedTasks" :key="task.orderId">
+            <div class="order-row completed-row" v-for="task in visibleCompletedTasks" :key="task.orderId">
               <div class="row-top">
                 <span class="order-id">订单号: {{ task.orderId }}</span>
                 <span class="published-badge">已完成</span>
@@ -61,6 +61,13 @@
                 </div>
               </div>
             </div>
+            <button
+              v-if="completedTasks.length > 2"
+              class="btn-history-toggle"
+              @click="isCompletedExpanded = !isCompletedExpanded"
+            >
+              {{ isCompletedExpanded ? '收起' : '展开更多' }}
+            </button>
           </div>
           <div class="empty-state" v-else>
             <p>暂无已完成订单记录</p>
@@ -78,15 +85,14 @@
           </div>
 
           <div class="task-overview">
-            <p>订单号: <strong>{{ currentTask.orderId }}</strong></p>
-            <p>承运: {{ currentTask.carModel }} × {{ currentTask.quantity }} 辆</p>
-            <p>发往: <strong>{{ currentTask.destination }}</strong></p>
-          </div>
-
-          <div class="vins-container">
-            <p class="area-label">车身码清单</p>
-            <div class="vin-tag-list">
-              <span class="vin-tag-mini" v-for="(vin, index) in currentTask.vins" :key="index">{{ vin }}</span>
+            <div class="overview-grid">
+              <p>订单号: <strong>{{ currentTask.orderId }}</strong></p>
+              <p>车型: <strong>{{ currentTask.carModel }}</strong></p>
+              <p>数量: <strong>{{ currentTask.quantity }} 辆</strong></p>
+              <p>运输方式: <strong>{{ currentTask.transportType }}</strong></p>
+              <p>发往: <strong>{{ currentTask.destination }}</strong></p>
+              <p>运途位置: <strong>{{ currentTask.via }}</strong></p>
+              <p>总费用: <strong>{{ currentTask.totalCost }}</strong></p>
             </div>
           </div>
 
@@ -101,33 +107,15 @@
                 class="modern-input"
               />
 
-              <label class="mt-12">当前位置</label>
-              <input
-                v-model="currentLocation"
-                type="text"
-                placeholder="例如: 京港澳高速 K1234"
-                class="modern-input"
-              />
+              <p class="location-text">当前位置：{{ locationStatus || '点击上报时自动获取位置' }}</p>
 
               <button
                 class="btn-yellow full-width mt-16"
                 @click="reportLocation"
-                :disabled="!locationVin || !currentLocation"
+                :disabled="!canReportLocation"
               >
-                确认上报
+                {{ isReporting ? '定位中...' : '确认上报' }}
               </button>
-            </div>
-
-            <div class="history-timeline" v-if="locationHistory.length > 0">
-              <p class="area-label mt-24">位置打卡记录</p>
-              <div class="timeline-item" v-for="(loc, index) in locationHistory" :key="index">
-                <div class="tl-dot"></div>
-                <div class="tl-content">
-                  <p class="tl-vin">{{ loc.vin }}</p>
-                  <p class="tl-loc">{{ loc.location }}</p>
-                  <p class="tl-time">{{ loc.time }}</p>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -162,95 +150,264 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { allOrderApi, receiveApi, locationApi, arriveApi } from '@/api/carrier'
 
-const availableOrders = ref([
-  {
-    id: 'ORD20260410001',
-    carModel: '轿车 A级',
-    quantity: 3,
-    destination: '北京',
-    transportType: '铁路运输',
-    shipper: '成都物流中心',
-    publishTime: '2026-04-10 10:30:00',
-    vins: ['LSVAA2180E2123456', 'WVWZZZ3CZWE123456', 'LFV3A23C8E3123456']
-  },
-  {
-    id: 'ORD20260410002',
-    carModel: 'SUV B级',
-    quantity: 2,
-    destination: '上海',
-    transportType: '公路运输',
-    shipper: '广州物流中心',
-    publishTime: '2026-04-10 11:15:00',
-    vins: ['WDD2050431F123456', 'BMW1234567890ABCDE']
-  }
-])
+const availableOrders = ref([])
 
 const currentTask = ref(null)
 const completedTasks = ref([])
 const locationVin = ref('')
-const currentLocation = ref('')
-const locationHistory = ref([])
+const locationStatus = ref('')
+const isReporting = ref(false)
+const isCompletedExpanded = ref(false)
 
-const acceptOrder = (order) => {
-  currentTask.value = {
+const canReportLocation = computed(() => {
+  return locationVin.value.trim().length > 0 && !isReporting.value
+})
+
+const visibleCompletedTasks = computed(() => {
+  return isCompletedExpanded.value ? completedTasks.value : completedTasks.value.slice(0, 2)
+})
+
+const mapOrder = (order) => ({
+  id: order.id,
+  carModel: order.carModel || '车型未知',
+  quantity: order.totalQuantity || 0,
+  destination: order.destination || '',
+  departurePoint: order.departurePoint || '暂无',
+  via: order.via || '暂无',
+  transportType: order.transportType === 1 ? '公路' : order.transportType === 2 ? '铁路' : '运输方式未知',
+  shipper: order.shipper || '发运商未知',
+  publishTime: order.createTime || order.publishTime || '',
+  updateTime: order.updateTime || '',
+  totalCost: order.totalCost ?? '暂无',
+  vins: order.vins || [],
+  status: order.status
+})
+
+const fetchLatestOrders = async () => {
+  const res = await allOrderApi()
+  let orders = res.data?.records || res.records || res.data || res
+  orders = Array.isArray(orders) ? orders : []
+
+  const status2Orders = orders.filter(order => order.status === 2).map(mapOrder)
+  const status3Orders = orders.filter(order => order.status === 3).map(mapOrder)
+  const status4Orders = orders.filter(order => order.status === 4).map(mapOrder)
+
+  availableOrders.value = status2Orders
+
+  if (status3Orders.length > 0) {
+    currentTask.value = {
+      ...status3Orders[0],
+      orderId: status3Orders[0].id,
+      status: 'transporting'
+    }
+  } else {
+    currentTask.value = null
+  }
+
+  completedTasks.value = status4Orders.map(order => ({
+    ...order,
     orderId: order.id,
-    carModel: order.carModel,
-    quantity: order.quantity,
-    destination: order.destination,
-    status: 'accepted',
-    vins: order.vins
+    completeTime: order.updateTime || '',
+    status: 'completed'
+  }))
+}
+
+const getReadableLocation = async (latitude, longitude) => {
+  const response = await fetch(
+    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=zh-CN`,
+    { method: 'GET' }
+  )
+
+  if (!response.ok) {
+    throw new Error('reverse geocode failed')
   }
 
-  const index = availableOrders.value.findIndex(o => o.id === order.id)
-  if (index > -1) {
-    availableOrders.value.splice(index, 1)
+  const data = await response.json()
+  const city = data.city || data.locality || data.localityInfo?.administrative?.[0]?.name || ''
+  return city || data.displayName || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+}
+
+const updateCurrentLocation = () => {
+  if (!navigator.geolocation) {
+    locationStatus.value = '浏览器不支持定位'
+    return
   }
 
-  locationHistory.value = []
-  alert(`已接收订单 ${order.id}`)
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords
+
+      try {
+        locationStatus.value = await getReadableLocation(latitude, longitude)
+      } catch (error) {
+        console.error('自动获取位置失败:', error)
+        locationStatus.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+      }
+    },
+    (error) => {
+      console.error('自动定位失败:', error)
+      locationStatus.value = '获取位置失败'
+    }
+  )
+}
+
+onMounted(async () => {
+  updateCurrentLocation()
+
+  try {
+    await fetchLatestOrders()
+  } catch (error) {
+    console.error('获取订单失败:', error)
+    availableOrders.value = []
+    currentTask.value = null
+    completedTasks.value = []
+  }
+})
+
+const acceptOrder = async (order) => {
+  try {
+    const carrierId = localStorage.getItem('userId')
+    const res = await receiveApi({
+      orderId: order.id,
+      carrierId: Number(carrierId)
+    })
+
+    if (Number(res.code) === 1) {
+      currentTask.value = {
+        orderId: order.id,
+        carModel: order.carModel,
+        quantity: order.quantity,
+        destination: order.destination,
+        status: 'accepted',
+        vins: order.vins
+      }
+
+      const index = availableOrders.value.findIndex(o => o.id === order.id)
+      if (index > -1) {
+        availableOrders.value.splice(index, 1)
+      }
+
+      ElMessage.success(`已接收订单 ${order.id}`)
+    } else {
+      ElMessage.error(res.msg || '接收订单失败')
+    }
+  } catch (error) {
+    console.error('接收订单出错:', error)
+    ElMessage.error('接收订单失败，请稍后重试')
+  }
 }
 
 const startTransport = () => {
   currentTask.value.status = 'transporting'
-  alert('运输已开始，请按时上报位置信息')
+  ElMessage.success('运输已开始，请按时上报位置信息')
 }
 
-const reportLocation = () => {
-  if (!currentTask.value.vins.includes(locationVin.value)) {
-    alert('车身码不在当前订单中')
+const reportLocation = async () => {
+  isReporting.value = true
+  locationStatus.value = '正在获取位置...'
+
+  try {
+    if (!navigator.geolocation) {
+      locationStatus.value = '浏览器不支持定位'
+      ElMessage.error('浏览器不支持定位')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords
+
+        let viaLocation = '未知位置'
+        try {
+          viaLocation = await getReadableLocation(latitude, longitude)
+        } catch (locationError) {
+          console.error('反查位置失败:', locationError)
+          viaLocation = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+        }
+
+        locationStatus.value = viaLocation
+
+        try {
+          const res = await locationApi({
+            vin: locationVin.value,
+            via: viaLocation
+          })
+
+          if (Number(res.code) === 1) {
+            locationVin.value = ''
+            await fetchLatestOrders()
+            ElMessage.success('位置上报成功')
+          } else {
+            ElMessage.error(res.msg || '位置上报失败')
+          }
+        } catch (error) {
+          console.error('上报位置出错:', error)
+          ElMessage.error('位置上报失败，请稍后重试')
+        } finally {
+          isReporting.value = false
+        }
+      },
+      (error) => {
+        isReporting.value = false
+        console.error('获取位置失败:', error)
+        if (error.code === error.PERMISSION_DENIED) {
+          locationStatus.value = '定位权限被拒绝'
+          ElMessage.error('请授予浏览器定位权限')
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          locationStatus.value = '定位服务不可用'
+          ElMessage.error('定位服务不可用')
+        } else {
+          locationStatus.value = '获取位置失败'
+          ElMessage.error('获取位置失败')
+        }
+      }
+    )
+  } catch (error) {
+    isReporting.value = false
+    console.error('位置上报异常:', error)
+    ElMessage.error('位置上报失败')
+  }
+}
+
+const confirmDelivery = async () => {
+  try {
+    await ElMessageBox.confirm('确认所有车辆已送达？', '提示', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
     return
   }
 
-  locationHistory.value.unshift({
-    vin: locationVin.value,
-    location: currentLocation.value,
-    time: new Date().toLocaleString('zh-CN')
-  })
+  try {
+    const res = await arriveApi({
+      orderId: currentTask.value.orderId
+    })
 
-  locationVin.value = ''
-  currentLocation.value = ''
-  alert('位置上报成功')
-}
+    if (Number(res.code) === 1) {
+      completedTasks.value.unshift({
+        ...currentTask.value,
+        completeTime: new Date().toLocaleString('zh-CN'),
+        status: 'completed'
+      })
 
-const confirmDelivery = () => {
-  if (!confirm('确认所有车辆已送达？')) {
-    return
+      currentTask.value = null
+      locationVin.value = ''
+      locationStatus.value = ''
+
+      ElMessage.success('订单已完成！')
+    } else {
+      ElMessage.error(res.msg || '确认送达失败')
+    }
+  } catch (error) {
+    console.error('确认送达出错:', error)
+    ElMessage.error('确认送达失败，请稍后重试')
   }
-
-  completedTasks.value.unshift({
-    ...currentTask.value,
-    completeTime: new Date().toLocaleString('zh-CN'),
-    status: 'completed'
-  })
-
-  currentTask.value = null
-  locationVin.value = ''
-  currentLocation.value = ''
-  locationHistory.value = []
-
-  alert('订单已完成！')
 }
 
 const getStatusText = (status) => {
@@ -322,27 +479,16 @@ const getStatusText = (status) => {
 .task-status-pill.transporting { background: #E3F2FD; color: #1565C0; }
 
 .task-overview { background: #F9F8F5; padding: 16px; border-radius: 12px; margin-bottom: 24px; font-size: 13px; color: #555; }
-.task-overview p { margin: 6px 0; }
+.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.task-overview p { margin: 0; line-height: 1.5; }
 .task-overview strong { color: #111; font-size: 14px; }
-
-.area-label { font-size: 12px; color: #888; margin-bottom: 12px; font-weight: bold; }
-.vin-tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-.vin-tag-mini { background: #111; color: #FFF; padding: 6px 10px; border-radius: 10px; font-size: 11px; font-family: monospace; letter-spacing: 0.5px; }
 
 .location-section { border-top: 1px dashed #EAE6DF; padding-top: 20px; }
 .sub-title { font-size: 15px; font-weight: bold; color: #111; margin: 0 0 16px 0; }
 .form-area label { display: block; margin-bottom: 8px; font-size: 12px; color: #555; font-weight: bold; }
 .modern-input { width: 100%; box-sizing: border-box; background: #F9F8F5; border: 2px solid transparent; color: #111; padding: 12px; border-radius: 12px; font-size: 13px; transition: border 0.2s; outline: none; }
 .modern-input:focus { border-color: #FFD23F; background: #FFF; }
-
-.history-timeline { margin-top: 24px; }
-.timeline-item { display: flex; gap: 12px; margin-bottom: 12px; }
-.tl-dot { width: 8px; height: 8px; background: #FFD23F; border-radius: 50%; margin-top: 6px; box-shadow: 0 0 0 3px rgba(255,210,63,0.2); }
-.tl-content { background: #F9F8F5; padding: 10px 14px; border-radius: 10px; flex: 1; }
-.tl-content p { margin: 0 0 4px 0; font-size: 12px; }
-.tl-vin { font-weight: bold; color: #111; font-family: monospace; }
-.tl-loc { color: #555; }
-.tl-time { color: #999; font-size: 11px; margin-bottom: 0 !important; }
+.location-text { margin: 12px 0 0; font-size: 13px; color: #666; }
 
 /* 关键修复：white-space: nowrap 防止按钮被挤压换行 */
 .btn-yellow {
@@ -366,6 +512,18 @@ const getStatusText = (status) => {
 .success-bg:hover:not(:disabled) { background: #43A047; }
 
 .published-badge { background: #E8F5E9; color: #4CAF50; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+.btn-history-toggle {
+  border: none;
+  background: #111;
+  color: #FFF;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  align-self: center;
+}
+.btn-history-toggle:hover { opacity: 0.9; }
 .panel-title { margin: 0 0 8px 0; font-size: 18px; font-weight: bold; color: #111; }
 .summary-empty { text-align: center; padding: 40px 0; color: #888; }
 .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
