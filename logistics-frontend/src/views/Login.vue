@@ -197,7 +197,7 @@ const handleLogin = async () => {
 /* 包含文字和图片的整体容器 */
 .left-slogan {
   position: relative;
-  top: -230px; /* 整体高度微调，可根据视觉效果修改此负值 */
+  top: -300px; /* 整体高度微调，可根据视觉效果修改此负值 */
   z-index: 2;
   text-align: center;
 }
@@ -231,7 +231,7 @@ const handleLogin = async () => {
 
 /* === 单独控制左侧图片（校徽） === */
 .logo-left {
-  width: 100px;            /* 我将左侧稍微调小了点，如果想更小/更大，修改这里的数字 */
+  width: 100px;
   height: auto;
   object-fit: contain;
   filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.4));
@@ -239,7 +239,7 @@ const handleLogin = async () => {
 
 /* === 单独控制右侧图片（物流标志） === */
 .logo-right {
-  width: 180px;            /* 保持相对较大，或根据实际图片比例修改 */
+  width: 200px;            /* 保持相对较大，或根据实际图片比例修改 */
   height: auto;
   object-fit: contain;
   filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.4));
