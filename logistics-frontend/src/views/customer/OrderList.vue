@@ -1,10 +1,7 @@
 ﻿<template>
   <div class="page-inner-content">
 
-    <div class="page-title-area">
-      <h2>新建车辆运输订单</h2>
-      <p class="subtitle">选择车型、目的地及运输方案，快速生成发运单</p>
-    </div>
+
 
     <div class="content-layout">
       <main class="form-column">
@@ -50,7 +47,7 @@
               <select v-model="destination" class="modern-select">
                 <option value="" disabled>请选择目的地城市...</option>
                 <option v-for="city in destinations" :key="city.id" :value="city">
-                  {{ city.name }} (距离: {{ city.distance }}km)
+                  {{ city.name }}
                 </option>
               </select>
               <span class="select-arrow">▼</span>

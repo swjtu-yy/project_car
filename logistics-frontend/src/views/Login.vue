@@ -1,22 +1,17 @@
 <template>
   <div class="login-container">
-    <!-- 左侧插画区域 -->
-    <div class="illustration-box" :class="{ 'is-typing-password': isPasswordFocused }">
-      <Vue3Lottie
-        ref="lottieRef"
-        :animationData="waitingAnimation"
-        :autoPlay="true"
-        :loop="true"
-        style="width: 480px; height: 480px;"
-      />
-      <!-- 新增品牌标语，强化B端系统调性 -->
-      <div class="brand-slogan">
-        <h2>物流协同管理系统</h2>
+    <div class="illustration-box">
+      <div class="left-slogan">
+        <h2>整车运输管理系统</h2>
         <p>高效 · 智能 · 全链路可视化</p>
+
+        <div class="logo-group">
+          <img src="@/assets/22.png" alt="校徽" class="logo-left" />
+          <img src="@/assets/物流运输.png" alt="标志" class="logo-right" />
+        </div>
       </div>
     </div>
 
-    <!-- 右侧登录表单区域 -->
     <div class="login-box">
       <div class="login-header">
         <h1>欢迎登录</h1>
@@ -49,8 +44,6 @@
             show-password
             clearable
             prefix-icon="Lock"
-            @focus="isPasswordFocused = true"
-            @blur="isPasswordFocused = false"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
@@ -81,7 +74,6 @@
         </el-button>
       </el-form>
 
-      <!-- 新增底部辅助信息 -->
       <div class="login-footer">
         <span>忘记密码？</span>
         <a href="#">联系管理员重置</a>
@@ -91,13 +83,10 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { loginApi } from '@/api/login'
-
-// 导入Lottie动画
-import waitingAnimation from '../assets/waiting.json'
 
 const router = useRouter()
 const loginFormRef = ref(null)
@@ -110,7 +99,7 @@ const loginForm = ref({
   role: ''
 })
 
-// 新增表单校验规则
+// 表单校验规则
 const loginRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' }
@@ -123,27 +112,13 @@ const loginRules = {
   ]
 }
 
-// 密码焦点状态
-const isPasswordFocused = ref(false)
-
-// Lottie组件引用
-const lottieRef = ref(null)
-
-// 监听密码焦点，控制动画
-watch(isPasswordFocused, (isFocused) => {
-  if (!lottieRef.value) return
-  isFocused ? lottieRef.value.pause() : lottieRef.value.play()
-})
-
 // 登录方法
 const handleLogin = async () => {
-  // 表单校验
   await loginFormRef.value.validate(async (valid) => {
     if (!valid) return ElMessage.warning('请完善登录信息')
 
     isLoading.value = true
     try {
-      // 调用登录API
       const res = await loginApi({
         username: loginForm.value.username,
         password: loginForm.value.password,
@@ -153,7 +128,6 @@ const handleLogin = async () => {
       const code = Number(res.code)
 
       if (code === 1) {
-        // 登录成功
         ElMessage.success('登录成功')
         const roleMap = {
           1: 'customer',
@@ -167,7 +141,6 @@ const handleLogin = async () => {
         localStorage.setItem('userName', res.data?.name || '')
         localStorage.setItem('userRole', currentRole || '')
 
-        // 根据角色跳转到对应页面
         const roleRoutes = {
           1: '/customer',
           2: '/shipper',
@@ -175,7 +148,6 @@ const handleLogin = async () => {
         }
         router.push(roleRoutes[loginForm.value.role] || '/login')
       } else if (code === 0) {
-        // 登录失败
         ElMessage.error('账号或密码错误')
       }
     } catch (error) {
@@ -196,47 +168,86 @@ const handleLogin = async () => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* 左侧插画区域 */
+/* 左侧图片区域 */
 .illustration-box {
   flex: 1;
-  /* 优化渐变：更符合物流系统的科技感蓝调 */
-  background: linear-gradient(135deg, #66a6ff 0%, #3f51b5 100%);
+  background-image: url('@/assets/login.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
-  transition: all 0.5s ease;
   position: relative;
   overflow: hidden;
 }
 
-/* 密码输入时的深色遮罩效果 */
-.illustration-box.is-typing-password {
-  background: linear-gradient(135deg, #2c3e50 0%, #1a237e 100%);
+/* 半透明遮罩 */
+.illustration-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 1;
 }
 
-/* 品牌标语 */
-.brand-slogan {
-  position: absolute;
-  bottom: 80px;
+/* 包含文字和图片的整体容器 */
+.left-slogan {
+  position: relative;
+  top: -230px; /* 整体高度微调，可根据视觉效果修改此负值 */
+  z-index: 2;
   text-align: center;
-  color: #fff;
 }
-.brand-slogan h2 {
-  font-size: 32px;
-  font-weight: 600;
-  margin: 0 0 12px 0;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+
+/* 主标题 */
+.left-slogan h2 {
+  font-size: 52px;
+  color: #ffffff;
+  margin: 0 0 16px 0;
+  font-weight: 700;
+  letter-spacing: 6px;
+  text-shadow: 2px 4px 10px rgba(0, 0, 0, 0.6);
 }
-.brand-slogan p {
-  font-size: 16px;
-  opacity: 0.9;
-  margin: 0;
-  letter-spacing: 2px;
+
+/* 副标题 */
+.left-slogan p {
+  font-size: 26px;
+  color: #f7fafc;
+  margin: 0 0 40px 0; /* 给副标题增加底部边距（40px），拉开它和下方Logo的距离 */
+  letter-spacing: 4px;
+  text-shadow: 1px 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* 两张图片的容器 */
+.logo-group {
+  display: flex;
+  justify-content: center; /* 水平居中 */
+  align-items: center;     /* 垂直居中对齐 */
+  gap: 80px;               /* 两张图片之间的间距 */
+}
+
+/* === 单独控制左侧图片（校徽） === */
+.logo-left {
+  width: 100px;            /* 我将左侧稍微调小了点，如果想更小/更大，修改这里的数字 */
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.4));
+}
+
+/* === 单独控制右侧图片（物流标志） === */
+.logo-right {
+  width: 180px;            /* 保持相对较大，或根据实际图片比例修改 */
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(2px 4px 8px rgba(0, 0, 0, 0.4));
 }
 
 /* 右侧登录框 */
 .login-box {
+  position: relative;
   width: 520px;
   background: #fff;
   padding: 80px 60px;
@@ -330,14 +341,26 @@ const handleLogin = async () => {
     flex: 0 0 300px;
     padding: 40px 0;
   }
-  .illustration-box .brand-slogan {
-    display: none;
-  }
+
   .login-box {
     width: 100%;
     border-radius: 16px 16px 0 0;
     margin-top: -20px;
     padding: 40px 30px;
+  }
+
+  .left-slogan {
+    top: 0;
+  }
+  .left-slogan h2 {
+    font-size: 32px;
+  }
+  .left-slogan p {
+    font-size: 18px;
+    margin-bottom: 20px;
+  }
+  .logo-left, .logo-right {
+    width: 80px;
   }
 }
 </style>
