@@ -1,11 +1,5 @@
 ﻿<template>
   <div class="page-inner-content">
-
-    <div class="page-title-area">
-      <h2>运输任务执行</h2>
-      <p class="subtitle">接单、上报车辆位置及确认送达状态</p>
-    </div>
-
     <div class="content-layout">
       <section class="main-column">
         <div class="white-card">
@@ -13,26 +7,32 @@
             <h3>📋 待接收订单</h3>
           </div>
           <div class="order-list" v-if="availableOrders.length > 0">
-            <div class="order-row" v-for="order in availableOrders" :key="order.id">
+            <div class="order-row" v-for="order in pagedAvailableOrders" :key="order.id">
               <div class="row-top">
                 <span class="order-id">订单号: {{ order.id }}</span>
                 <button class="btn-yellow" @click="acceptOrder(order)" :disabled="currentTask">
                   {{ currentTask ? '请先完成任务' : '接收订单' }}
                 </button>
               </div>
-              <div class="row-details">
-                <div class="detail-col">
-                  <p>车型: <strong>{{ order.carModel }}</strong></p>
-                  <p>数量: <strong>{{ order.quantity }} 辆</strong></p>
-                  <p>运输方式: {{ order.transportType }}</p>
-                </div>
-                <div class="detail-col">
-                  <p>目的地: <strong>{{ order.destination }}</strong></p>
-                  <p>发运商: {{ order.shipper }}</p>
-                  <p>发布时间: {{ order.publishTime }}</p>
-                </div>
+              <div class="row-details available-details">
+                <p class="detail-item">车型: <strong>{{ order.carModel }}</strong></p>
+                <p class="detail-item">数量: <strong>{{ order.quantity }} 辆</strong></p>
+                <p class="detail-item">运输方式: {{ order.transportType }}</p>
+                <p class="detail-item">目的地: <strong>{{ order.destination }}</strong></p>
+                <p class="detail-item">发运商: {{ order.shipper }}</p>
+                <p class="detail-item">发布时间: {{ order.publishTime }}</p>
               </div>
             </div>
+            <el-pagination
+              v-if="availableOrders.length > availablePageSize"
+              class="available-pagination"
+              background
+              layout="prev, pager, next"
+              :current-page="availableCurrentPage"
+              :page-size="availablePageSize"
+              :total="availableOrders.length"
+              @current-change="availableCurrentPage = $event"
+            />
           </div>
           <div class="empty-state" v-else>
             <div class="empty-icon">📭</div>
@@ -50,15 +50,11 @@
                 <span class="order-id">订单号: {{ task.orderId }}</span>
                 <span class="published-badge">已完成</span>
               </div>
-              <div class="row-details">
-                <div class="detail-col">
-                  <p>车型: <strong>{{ task.carModel }}</strong></p>
-                  <p>数量: <strong>{{ task.quantity }} 辆</strong></p>
-                </div>
-                <div class="detail-col">
-                  <p>目的地: <strong>{{ task.destination }}</strong></p>
-                  <p>完成时间: {{ task.completeTime }}</p>
-                </div>
+              <div class="row-details completed-details">
+                <p class="detail-item">车型: <strong>{{ task.carModel }}</strong></p>
+                <p class="detail-item">数量: <strong>{{ task.quantity }} 辆</strong></p>
+                <p class="detail-item">目的地: <strong>{{ task.destination }}</strong></p>
+                <p class="detail-item">完成时间: {{ task.completeTime }}</p>
               </div>
             </div>
             <button
@@ -155,6 +151,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { allOrderApi, receiveApi, locationApi, arriveApi } from '@/api/carrier'
 
 const availableOrders = ref([])
+const availableCurrentPage = ref(1)
+const availablePageSize = 2
 
 const currentTask = ref(null)
 const completedTasks = ref([])
@@ -165,6 +163,11 @@ const isCompletedExpanded = ref(false)
 
 const canReportLocation = computed(() => {
   return locationVin.value.trim().length > 0 && !isReporting.value
+})
+
+const pagedAvailableOrders = computed(() => {
+  const start = (availableCurrentPage.value - 1) * availablePageSize
+  return availableOrders.value.slice(start, start + availablePageSize)
 })
 
 const visibleCompletedTasks = computed(() => {
@@ -424,20 +427,17 @@ const getStatusText = (status) => {
 /* ====== 仅保留内容区样式，无全局覆盖 ====== */
 .page-inner-content {
   width: 100%;
-  padding: 10px;
+  padding: 0 10px 8px;
   box-sizing: border-box;
 }
-
-.page-title-area { margin: 10px 0 30px 10px; }
-.page-title-area h2 { font-size: 32px; font-weight: 900; margin: 0 0 8px 0; color: #111; letter-spacing: 1px; }
-.subtitle { font-size: 14px; color: #666; margin: 0; }
 
 /* 响应式布局：加入 flex-wrap，空间不够时自动换行，防止无限挤压卡片 */
 .content-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 18px;
   align-items: flex-start;
+  margin-top: -6px;
 }
 
 /* 左侧给一个基础最小宽度 */
@@ -450,9 +450,12 @@ const getStatusText = (status) => {
 .sidebar-column {
   flex: 0 0 360px;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.white-card { background: #FFFFFF; border-radius: 24px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); }
+.white-card { background: #FFFFFF; border-radius: 30px; padding: 28px; box-shadow: 0 8px 30px rgba(0,0,0,0.02); }
 .card-header { margin-bottom: 20px; }
 .card-header h3 { font-size: 18px; font-weight: bold; margin: 0; color: #111; }
 .mt-24 { margin-top: 24px; }
@@ -470,7 +473,67 @@ const getStatusText = (status) => {
 .detail-col p { margin: 6px 0; }
 .detail-col strong { color: #111; }
 
-.sticky-panel { position: sticky; top: 24px; }
+.available-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 20px;
+}
+
+.detail-item {
+  margin: 0;
+  line-height: 1.5;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.detail-item strong {
+  color: #111;
+  font-weight: 700;
+}
+
+.available-pagination {
+  align-self: center;
+  margin-top: 8px;
+  margin-bottom: 0px;
+}
+
+:deep(.available-pagination .el-pager li) {
+  border-radius: 10px;
+}
+
+:deep(.available-pagination .btn-prev),
+:deep(.available-pagination .btn-next) {
+  border-radius: 10px;
+}
+
+.completed-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 20px;
+}
+
+@media (max-width: 900px) {
+  .available-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .completed-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .available-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .completed-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sticky-panel { position: sticky; top: 24px; padding: 20px 22px; }
 .binding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .binding-header h3 { margin: 0; font-size: 16px; font-weight: bold; }
 
@@ -503,11 +566,13 @@ const getStatusText = (status) => {
 
 .btn-publish {
   background: #111; color: #FFF; border: none;
-  padding: 14px; border-radius: 24px;
-  font-weight: bold; cursor: pointer; font-size: 14px;
+  padding: 12px; border-radius: 30px;
+  font-weight: bold; cursor: pointer; font-size: 15px;
   transition: transform 0.2s;
+  white-space: nowrap;
 }
 .btn-publish:hover:not(:disabled) { transform: scale(1.02); }
+.btn-publish:disabled { background: #EAE6DF; color: #999; cursor: not-allowed; }
 .success-bg { background: #4CAF50; }
 .success-bg:hover:not(:disabled) { background: #43A047; }
 
@@ -524,9 +589,18 @@ const getStatusText = (status) => {
   align-self: center;
 }
 .btn-history-toggle:hover { opacity: 0.9; }
-.panel-title { margin: 0 0 8px 0; font-size: 18px; font-weight: bold; color: #111; }
-.summary-empty { text-align: center; padding: 40px 0; color: #888; }
-.empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.panel-title { margin: 0 0 6px 0; font-size: 20px; font-weight: bold; color: #111; }
+.summary-empty {
+  text-align: center;
+  padding: 32px 0;
+  min-height: 160px;
+  color: #888;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.empty-icon { font-size: 34px; margin-bottom: 10px; opacity: 0.5; }
 
 .full-width { width: 100%; box-sizing: border-box; }
 .mt-12 { margin-top: 12px; }

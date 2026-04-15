@@ -1,11 +1,6 @@
 ﻿<template>
   <div class="page-inner-content">
 
-    <div class="page-title-area">
-      <h2>发运管理</h2>
-      <p class="subtitle">管理待处理订单并完成车辆 VIN 码绑定</p>
-    </div>
-
     <div class="content-layout">
       <section class="main-column">
         <div class="white-card">
@@ -19,25 +14,31 @@
           </div>
 
           <div class="order-list" v-else-if="pendingOrders.length > 0">
-            <div class="order-row" v-for="order in pendingOrders" :key="order.id">
+            <div class="order-row" v-for="order in pagedPendingOrders" :key="order.id">
               <div class="row-top">
                 <span class="order-id">订单号: {{ order.id }}</span>
                 <span class="order-time-inline">下单时间 {{ formatOrderTime(order.createTime) }}</span>
                 <button class="btn-yellow" @click="acceptOrder(order)">接收订单</button>
               </div>
               <div class="row-details">
-                <div class="detail-col">
-                  <p>车型: <strong>{{ order.carModel }}</strong></p>
-                  <p>数量: <strong>{{ order.quantity }} 辆</strong></p>
-                  <p>运输方式: {{ order.transportType }}</p>
-                </div>
-                <div class="detail-col">
-                  <p>起始地: <strong>{{ order.departurePoint }}</strong></p>
-                  <p>目的地: <strong>{{ order.destination }}</strong></p>
-                  <p>价格: <strong>¥{{ order.totalCost }}</strong></p>
-                </div>
+                <p class="detail-item">车型: <strong>{{ order.carModel }}</strong></p>
+                <p class="detail-item">数量: <strong>{{ order.quantity }} 辆</strong></p>
+                <p class="detail-item">运输方式: <strong>{{ order.transportType }}</strong></p>
+                <p class="detail-item">起始地: <strong>{{ order.departurePoint }}</strong></p>
+                <p class="detail-item">目的地: <strong>{{ order.destination }}</strong></p>
+                <p class="detail-item">价格: <strong>¥{{ order.totalCost }}</strong></p>
               </div>
             </div>
+            <el-pagination
+              v-if="pendingOrders.length > pendingPageSize"
+              class="pending-pagination"
+              background
+              layout="prev, pager, next"
+              :current-page="pendingCurrentPage"
+              :page-size="pendingPageSize"
+              :total="pendingOrders.length"
+              @current-change="pendingCurrentPage = $event"
+            />
           </div>
           <div class="empty-state" v-else>
             <div class="empty-icon">📭</div>
@@ -120,7 +121,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { allOrderApi, receiveApi, bindApi } from '@/api/shipper'
 
 const pendingOrders = ref([])
@@ -131,7 +133,13 @@ const publishing = ref(false)
 const publishedOrders = ref([])
 const selectedOrder = ref(null)
 const vinInputs = ref([''])
+const pendingCurrentPage = ref(1)
+const pendingPageSize = 3
 const vinCount = computed(() => vinInputs.value.map(v => String(v || '').trim()).filter(Boolean).length)
+const pagedPendingOrders = computed(() => {
+  const start = (pendingCurrentPage.value - 1) * pendingPageSize
+  return pendingOrders.value.slice(start, start + pendingPageSize)
+})
 
 const extractRecords = (res) => {
   if (Array.isArray(res?.data?.records)) return res.data.records
@@ -218,6 +226,8 @@ const loadPendingOrders = async () => {
       .filter(isPendingOrder)
       .sort((a, b) => toTimestamp(b.createTime) - toTimestamp(a.createTime))
 
+    pendingCurrentPage.value = 1
+
     publishedOrders.value = normalizedOrders
       .filter(order => Number(order.status) !== 0)
       .sort((a, b) => {
@@ -243,13 +253,34 @@ const loadPendingOrders = async () => {
   }
 }
 
-const acceptOrder = (order) => {
-  selectedOrder.value = order
-  vinInputs.value = ['']
+const acceptOrder = async (order) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认接收订单 ${order.id} 吗？`,
+      '接收确认',
+      {
+        confirmButtonText: '确认接收',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
 
-  const index = pendingOrders.value.findIndex(o => o.id === order.id)
-  if (index > -1) pendingOrders.value.splice(index, 1)
+    selectedOrder.value = order
+    vinInputs.value = ['']
+
+    const index = pendingOrders.value.findIndex(o => o.id === order.id)
+    if (index > -1) pendingOrders.value.splice(index, 1)
+
+    ElMessage.success('订单已接收，请填写车身码后完成发布')
+  } catch {
+    ElMessage.info('已取消接收订单')
+  }
 }
+
+watch(pendingOrders, (list) => {
+  const maxPage = Math.max(1, Math.ceil(list.length / pendingPageSize))
+  if (pendingCurrentPage.value > maxPage) pendingCurrentPage.value = maxPage
+})
 
 const addVinInput = () => {
   if (!selectedOrder.value) return
@@ -257,7 +288,7 @@ const addVinInput = () => {
 
   const lastValue = String(vinInputs.value[vinInputs.value.length - 1] || '').trim()
   if (!lastValue) {
-    window.alert('请输入车身码')
+    ElMessage.warning('请先输入当前车身码')
     return
   }
 
@@ -269,13 +300,13 @@ const publishOrder = async () => {
 
   const vinList = vinInputs.value.map(v => String(v || '').trim()).filter(Boolean)
   if (vinList.length < selectedOrder.value.quantity) {
-    window.alert('车身码数量不足')
+    ElMessage.warning('车身码数量不足')
     return
   }
 
   const orderId = selectedOrder.value.orderId ?? Number(selectedOrder.value.id)
   if (!orderId) {
-    window.alert('订单ID无效，无法发布')
+    ElMessage.error('订单ID无效，无法发布')
     return
   }
 
@@ -284,21 +315,22 @@ const publishOrder = async () => {
 
     const receiveRes = await receiveApi({ orderId })
     if (Number(receiveRes?.code) !== 1) {
-      window.alert(receiveRes?.msg || '更新订单状态失败')
+      ElMessage.error(receiveRes?.msg || '更新订单状态失败')
       return
     }
 
     const bindRes = await bindApi({ orderId, vinList })
     if (Number(bindRes?.code) !== 1) {
-      window.alert(bindRes?.msg || '绑定车身码失败')
+      ElMessage.error(bindRes?.msg || '绑定车身码失败')
       return
     }
 
     selectedOrder.value = null
     vinInputs.value = ['']
     await loadPendingOrders()
+    ElMessage.success('订单发布成功')
   } catch (error) {
-    window.alert('发布失败，请稍后重试')
+    ElMessage.error('发布失败，请稍后重试')
     console.error('Publish order error:', error)
     await loadPendingOrders()
   } finally {
@@ -316,20 +348,17 @@ onMounted(() => {
 
 .page-inner-content {
   width: 100%;
-  padding: 10px;
+  padding: 0 10px 8px;
   box-sizing: border-box;
 }
-
-.page-title-area { margin: 10px 0 30px 10px; }
-.page-title-area h2 { font-size: 32px; font-weight: 900; margin: 0 0 8px 0; color: #111; letter-spacing: 1px; }
-.subtitle { font-size: 14px; color: #666; margin: 0; }
 
 /* 防挤压弹性布局 */
 .content-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 18px;
   align-items: flex-start;
+  margin-top: -6px;
 }
 
 .main-column {
@@ -340,41 +369,60 @@ onMounted(() => {
 .sidebar-column {
   flex: 0 0 360px;
   max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* 白底现代卡片 */
 .white-card {
   background: #FFFFFF;
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+  border-radius: 30px;
+  padding: 28px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.02);
 }
 .card-header { margin-bottom: 20px; }
 .card-title { font-size: 18px; font-weight: bold; margin: 0; color: #111; }
-.mt-24 { margin-top: 24px; }
+.mt-24 { margin-top: 16px; }
 
 /* 订单行 */
 .order-list { display: flex; flex-direction: column; gap: 16px; }
 .order-row {
   background: #F9F8F5;
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 18px 18px;
   transition: transform 0.2s;
 }
 .order-row:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
 
-.row-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 1px solid #EAE6DF; padding-bottom: 12px; margin-bottom: 16px; column-gap: 10px; }
+.row-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 1px solid #EAE6DF; padding-bottom: 12px; margin-bottom: 12px; column-gap: 12px; }
 .order-id { font-weight: bold; font-size: 15px; color: #111; }
 .order-time-inline { justify-self: center; font-size: 12px; font-weight: 500; color: #666; }
+.row-top .btn-yellow { padding: 6px 16px; border-radius: 18px; }
 
-.row-details { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; color: #666; }
-.detail-col { flex: 1; min-width: 140px; }
-.detail-col p { margin: 6px 0; }
-.detail-col strong { color: #111; }
+.row-details {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: center;
+  column-gap: 12px;
+  font-size: 15px;
+  color: #666;
+}
+.detail-item {
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-item strong {
+  color: #111;
+  font-size: 16px;
+}
 /* 主按钮，禁止换行 */
 .btn-yellow {
   background: #FFD23F; color: #222;
-  border: none; padding: 8px 20px; border-radius: 20px;
+  border: none; padding: 10px 20px; border-radius: 22px;
   font-weight: bold; cursor: pointer; font-size: 13px;
   transition: all 0.2s;
   white-space: nowrap;
@@ -382,9 +430,14 @@ onMounted(() => {
 .btn-yellow:hover:not(:disabled) { background: #F6C523; transform: scale(1.02); }
 .btn-yellow:disabled { opacity: 0.5; cursor: not-allowed; background: #EAE6DF; color: #999; }
 
+.pending-pagination { align-self: center; margin-top: 4px; }
+:deep(.pending-pagination .el-pager li) { border-radius: 10px; }
+:deep(.pending-pagination .btn-prev),
+:deep(.pending-pagination .btn-next) { border-radius: 10px; }
+
 /* 历史列表 */
 .history-list { display: flex; flex-direction: column; gap: 12px; }
-.history-row { display: flex; align-items: center; background: #F9F8F5; padding: 12px 12px; border-radius: 12px; }
+.history-row { display: flex; align-items: center; background: #F9F8F5; padding: 12px 12px; border-radius: 16px; }
 .status-dot { width: 8px; height: 8px; background: #FFD23F; border-radius: 50%; margin-right: 8px; }
 .history-info {
   flex: 1;
@@ -394,10 +447,10 @@ onMounted(() => {
   align-items: center;
   column-gap: 10px;
 }
-.h-field { min-width: 0; font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
-.h-id { font-weight: bold; font-size: 14px; color: #111; text-align: left; }
-.h-desc { font-size: 13px; color: #666; }
-.h-time { color: #999; text-align: right; }
+.h-field { min-width: 0; font-size: 14px; font-weight: 600; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.h-id { font-weight: 800; font-size: 17px; color: #111; text-align: left; }
+.h-desc { font-size: 15px; font-weight: 700; color: #444; }
+.h-time { font-size: 13px; font-weight: 600; color: #777; text-align: right; }
 .h-status-cell { overflow: visible; text-align: center; }
 
 .status-badge {
@@ -405,9 +458,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-width: 72px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.3px;
   border: 1px solid transparent;
@@ -444,7 +497,7 @@ onMounted(() => {
 }
 
 /* 右侧绑定面板 (深色卡片) */
-.sticky-panel { position: sticky; top: 24px; }
+.sticky-panel { position: sticky; top: 24px; padding: 20px 22px; }
 .dark-theme-card { background: #2D2D2D; color: #Fdfcf9; border: none; }
 .binding-header-dark { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .binding-header-dark h3 { margin: 0; font-size: 16px; font-weight: bold; color: #Fdfcf9; }
@@ -482,4 +535,67 @@ onMounted(() => {
 .mt-20 { margin-top: 20px; }
 .empty-state { text-align: center; color: #999; padding: 40px 0; }
 .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+
+@media (max-width: 1024px) {
+  .row-details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 8px;
+  }
+
+  .history-info {
+    grid-template-columns: 0.8fr 1.4fr 1.2fr 0.8fr 0.9fr 0.9fr;
+  }
+
+  .h-time {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-inner-content {
+    padding: 0 2px 8px;
+  }
+
+  .white-card {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .row-top {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+
+  .row-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 10px;
+  }
+
+  .detail-item {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .order-time-inline {
+    justify-self: start;
+  }
+
+  .history-info {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+    align-items: start;
+  }
+
+  .h-field,
+  .h-id,
+  .h-time {
+    text-align: left;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .h-status-cell {
+    justify-self: start;
+  }
+}
 </style>

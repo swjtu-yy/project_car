@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div class="be-run-global-layout">
     <div class="app-container">
       <aside class="white-sidebar">
@@ -189,4 +189,4 @@ const handleDropdownCommand = (command) => {
   gap: 10px;
   background: #FFFFFF;
   padding: 6px 16px 6px 6px;
-  border-
+  border- -->
